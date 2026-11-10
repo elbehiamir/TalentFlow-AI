@@ -1,58 +1,94 @@
 # TalentFlow AI
 
-An AI-assisted applicant tracking platform for modern recruiting teams.
+An AI-assisted applicant tracking platform for recruitment teams. Recruiters remain responsible for every hiring decision.
 
-TalentFlow AI helps HR teams organize vacancies and candidates, review CV information, and understand candidate-to-job fit through transparent, explainable criteria. It is designed as a practical SaaS foundation, not an automated hiring decision-maker.
+## Stack
 
-## Product principles
-- **Human-in-the-loop:** recruiters make every hiring decision.
-- **Explainable matching:** show which job requirements are supported by CV evidence and which need review.
-- **Privacy by design:** collect only relevant candidate information and protect uploaded documents.
-- **No fabricated profiles:** demo content is clearly labelled as sample data.
+- Frontend: React + Vite
+- API: Node.js + Express
+- Database: PostgreSQL
+- SQL queries use parameters to avoid SQL injection.
 
-## Current foundation
-- Responsive React + Vite dashboard.
-- Candidate pipeline overview and vacancy summaries.
-- Node.js + Express API health endpoint.
-- Initial project structure for PostgreSQL integration and CV processing.
+## Features connected to PostgreSQL
 
-## Repository structure
-```
-client/       React + Vite application
-server/       Express API
-```
+- Candidate list, search and stage filter
+- Create, edit and delete candidate records
+- Create and pause/reactivate job openings
+- Dashboard metrics and pipeline counts calculated from database records
+- Activity log for candidate and job changes
+- CSV export of the currently filtered candidate list
+
+The database starts empty. The dashboard does not invent candidate profiles or hiring statistics. Add records through the interface to see real data.
 
 ## Run locally
 
-### Requirements
-- Node.js 20+
-- npm
+Requirements: Node.js 20+ and PostgreSQL.
 
-### Frontend
+### 1. Create the database
+
+Open a terminal where PostgreSQL is available and run:
+
+```bash
+createdb talentflow_ai
+```
+
+If `createdb` is not available, use psql:
+
+```sql
+CREATE DATABASE talentflow_ai;
+```
+
+### 2. Configure and start the API
+
+```bash
+cd server
+npm install
+cp .env.example .env
+```
+
+Open `server/.env` and set `DATABASE_URL` to your local PostgreSQL username and password if you use one. Example:
+
+```env
+DATABASE_URL=postgresql://YOUR_POSTGRES_USER:YOUR_PASSWORD@localhost:5432/talentflow_ai
+CLIENT_URL=http://localhost:5173
+PORT=5000
+DATABASE_SSL=false
+```
+
+Then start the API:
+
+```bash
+npm run dev
+```
+
+On first startup, the API creates the required tables and indexes automatically. Check the connection at `http://localhost:5000/api/health`; the response should show `"database":"connected"`.
+
+### 3. Start the frontend in a second terminal
+
 ```bash
 cd client
 npm install
 npm run dev
 ```
 
-### Backend
-```bash
-cd server
-npm install
-cp .env.example .env
-npm run dev
-```
+Open `http://localhost:5173`.
 
-The API runs on `http://localhost:5000` by default and exposes `GET /api/health`.
+## API routes
 
-## Roadmap
-- [ ] PostgreSQL schema and migrations
-- [ ] Secure authentication and role-based access
-- [ ] Candidate and vacancy CRUD
-- [ ] Private PDF upload and safe text extraction
-- [ ] Explainable job matching with recruiter review
-- [ ] Audit log, consent and retention controls
-- [ ] Automated tests and deployment
+- `GET /api/health`
+- `GET /api/dashboard`
+- `GET /api/candidates?search=&stage=`
+- `POST /api/candidates`
+- `PATCH /api/candidates/:id`
+- `DELETE /api/candidates/:id`
+- `GET /api/jobs`
+- `POST /api/jobs`
+- `PATCH /api/jobs/:id`
+- `DELETE /api/jobs/:id`
+- `GET /api/activity`
 
-## Important
-TalentFlow AI is decision-support software. It must not reject, rank, or make employment decisions about people without meaningful human review. Matching criteria should be job-related, validated, and auditable.
+## Security and product boundaries
+
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, role-based access control, private CV storage, consent and retention workflows, rate limiting, automated tests and production deployment still need to be implemented. Use test records only until those protections are in place.
+
+TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
