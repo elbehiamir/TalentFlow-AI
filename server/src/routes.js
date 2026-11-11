@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { pool, logActivity } from './db.js';
-import { CANDIDATE_STAGES, JOB_STATUSES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
+import { CANDIDATE_STAGES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
 
 const router = Router();
 const stages = CANDIDATE_STAGES;
-const jobStatuses = JOB_STATUSES;
 
 // Dashboard data is calculated from PostgreSQL, never from hard-coded demo metrics.
 router.get('/dashboard', async (_req, res, next) => {
@@ -56,12 +55,12 @@ router.post('/candidates', async (req, res, next) => {
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const { name, email, role, stage, score, job_id: jobId } = parsed.value;
     const result = await pool.query(
-      \`INSERT INTO candidates (name, email, role, stage, score, job_id)
+      `INSERT INTO candidates (name, email, role, stage, score, job_id)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at\`,
+       RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
       [name, email, role, stage, score, jobId]
     );
-    await logActivity('created', 'candidate', result.rows[0].id, \`Candidate added: \${name}\`);
+    await logActivity('created', 'candidate', result.rows[0].id, `Candidate added: ${name}`);
     res.status(201).json({ candidate: result.rows[0] });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'A candidate with this email already exists.' });
@@ -81,11 +80,11 @@ router.patch('/candidates/:id', async (req, res, next) => {
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const { name, email, role, stage, score, job_id: jobId } = parsed.value;
     const result = await pool.query(
-      \`UPDATE candidates SET name=$1, email=$2, role=$3, stage=$4, score=$5, job_id=$6, updated_at=NOW()
-       WHERE id=$7 RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at\`,
+      `UPDATE candidates SET name=$1, email=$2, role=$3, stage=$4, score=$5, job_id=$6, updated_at=NOW()
+       WHERE id=$7 RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
       [name, email, role, stage, score, jobId, id]
     );
-    await logActivity('updated', 'candidate', id, \`Candidate updated: \${name}\`);
+    await logActivity('updated', 'candidate', id, `Candidate updated: ${name}`);
     res.json({ candidate: result.rows[0] });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'A candidate with this email already exists.' });
@@ -100,7 +99,7 @@ router.delete('/candidates/:id', async (req, res, next) => {
     if (id === null) return res.status(400).json({ error: 'Invalid candidate id.' });
     const result = await pool.query('DELETE FROM candidates WHERE id=$1 RETURNING id, name', [id]);
     if (!result.rowCount) return res.status(404).json({ error: 'Candidate not found.' });
-    await logActivity('deleted', 'candidate', id, \`Candidate deleted: \${result.rows[0].name}\`);
+    await logActivity('deleted', 'candidate', id, `Candidate deleted: ${result.rows[0].name}`);
     res.json({ message: 'Candidate deleted.' });
   } catch (error) { next(error); }
 });
@@ -127,7 +126,7 @@ router.post('/jobs', async (req, res, next) => {
       'INSERT INTO jobs (title, team, location) VALUES ($1,$2,$3) RETURNING *',
       [title, team, location]
     );
-    await logActivity('created', 'job', result.rows[0].id, \`Job opening created: \${title}\`);
+    await logActivity('created', 'job', result.rows[0].id, `Job opening created: ${title}`);
     res.status(201).json({ job: { ...result.rows[0], applicant_count: 0 } });
   } catch (error) { next(error); }
 });
@@ -146,7 +145,7 @@ router.patch('/jobs/:id', async (req, res, next) => {
       'UPDATE jobs SET title=$1, team=$2, location=$3, status=$4, updated_at=NOW() WHERE id=$5 RETURNING *',
       [title, team, location, status, id]
     );
-    await logActivity('updated', 'job', id, \`Job opening updated: \${title}\`);
+    await logActivity('updated', 'job', id, `Job opening updated: ${title}`);
     res.json({ job: result.rows[0] });
   } catch (error) { next(error); }
 });
@@ -157,7 +156,7 @@ router.delete('/jobs/:id', async (req, res, next) => {
     if (id === null) return res.status(400).json({ error: 'Invalid job id.' });
     const result = await pool.query('DELETE FROM jobs WHERE id=$1 RETURNING id, title', [id]);
     if (!result.rowCount) return res.status(404).json({ error: 'Job not found.' });
-    await logActivity('deleted', 'job', id, \`Job opening deleted: \${result.rows[0].title}\`);
+    await logActivity('deleted', 'job', id, `Job opening deleted: ${result.rows[0].title}`);
     res.json({ message: 'Job deleted.' });
   } catch (error) { next(error); }
 });
