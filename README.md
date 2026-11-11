@@ -17,6 +17,7 @@ An AI-assisted applicant tracking platform for recruitment teams. Recruiters rem
 - Dashboard metrics and pipeline counts calculated from database records
 - Activity log for candidate and job changes
 - CSV export of the currently filtered candidate list
+- API validation for candidate and job fields, allowed stages/statuses, fit-score bounds and record IDs
 
 The database starts empty. The dashboard does not invent candidate profiles or hiring statistics. Add records through the interface to see real data.
 
@@ -72,6 +73,15 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+## Run API validation tests
+
+The backend uses Node's built-in test runner; no additional test framework is required.
+
+```bash
+cd server
+npm test
+```
 
 ## API routes
 
