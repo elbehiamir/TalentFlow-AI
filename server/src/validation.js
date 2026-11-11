@@ -4,7 +4,7 @@ export const CANDIDATE_STAGES = Object.freeze([
 
 export const JOB_STATUSES = Object.freeze(['Active', 'Paused', 'Closed']);
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function cleanString(value, max = 160) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
