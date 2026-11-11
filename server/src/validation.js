@@ -4,7 +4,7 @@ export const CANDIDATE_STAGES = Object.freeze([
 
 export const JOB_STATUSES = Object.freeze(['Active', 'Paused', 'Closed']);
 
-const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\\.[^\s@]+$/;
 
 export function cleanString(value, max = 160) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -17,7 +17,7 @@ export function validScore(value) {
 
 export function parsePositiveId(value) {
   const text = String(value ?? '');
-  if (!/^[1-9]\\d*$/.test(text)) return null;
+  if (!/^[1-9]\d*$/.test(text)) return null;
   const id = Number(text);
   return Number.isSafeInteger(id) ? id : null;
 }
