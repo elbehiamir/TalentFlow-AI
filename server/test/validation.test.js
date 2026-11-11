@@ -75,7 +75,10 @@ test('shared helpers expose stable allowed values and boundaries', () => {
   assert.ok(JOB_STATUSES.includes('Closed'));
   assert.equal(cleanString('  x  ', 1), 'x');
   assert.equal(validScore(100), 100);
+  assert.equal(validScore('72'), 72);
   assert.equal(validScore(100.5), null);
+  assert.equal(validScore(true), null);
+  assert.equal(validScore(''), null);
 });
 
 test('non-object request bodies are rejected', () => {
