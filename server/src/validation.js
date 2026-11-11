@@ -11,7 +11,10 @@ export function cleanString(value, max = 160) {
 }
 
 export function validScore(value) {
-  const score = Number(value ?? 0);
+  if (value === undefined || value === null) return 0;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const score = Number(value);
   return Number.isInteger(score) && score >= 0 && score <= 100 ? score : null;
 }
 
