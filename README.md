@@ -118,8 +118,9 @@ Content-Type: application/json
 The percentage is calculated as `matched required skills / unique required skills × 100`, rounded to the nearest integer. Matching is case-insensitive and normalizes Unicode and whitespace, but it does not infer synonyms, skill proficiency, experience or seniority. Extra skills are reported separately and do not raise the percentage. The result is decision support only, not a hiring recommendation.
 
 The preview does not upload files, store candidate details or extract skills from CVs. Those capabilities remain unimplemented.
+
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, role-based access control, private CV storage, consent and retention workflows, rate limiting, automated tests and production deployment still need to be implemented. Use test records only until those protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, role-based access control, private CV storage, consent and retention workflows, rate limiting, API integration tests and production deployment still need to be implemented. The current Node test suite covers validation and the deterministic matching function. Use test records only until those protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
