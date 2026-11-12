@@ -18,6 +18,7 @@ An AI-assisted applicant tracking platform for recruitment teams. Recruiters rem
 - Activity log for candidate and job changes
 - CSV export of the currently filtered candidate list
 - API validation for candidate and job fields, allowed stages/statuses, fit-score bounds and record IDs
+- Explainable skill-coverage preview using exact normalized skill names; no hidden AI score or automatic hiring decision
 
 The database starts empty. The dashboard does not invent candidate profiles or hiring statistics. Add records through the interface to see real data.
 
@@ -96,7 +97,27 @@ npm test
 - `PATCH /api/jobs/:id`
 - `DELETE /api/jobs/:id`
 - `GET /api/activity`
+- `POST /api/matching/preview`
 
+## Explainable skill matching preview
+
+The preview endpoint accepts structured skill lists and returns matched, missing and additional skills:
+
+```http
+POST /api/matching/preview
+Content-Type: application/json
+```
+
+```json
+{
+  "candidateSkills": ["React", "Node.js", "Accessibility"],
+  "requiredSkills": ["React", "PostgreSQL", "Node.js"]
+}
+```
+
+The percentage is calculated as `matched required skills / unique required skills × 100`, rounded to the nearest integer. Matching is case-insensitive and normalizes Unicode and whitespace, but it does not infer synonyms, skill proficiency, experience or seniority. Extra skills are reported separately and do not raise the percentage. The result is decision support only, not a hiring recommendation.
+
+The preview does not upload files, store candidate details or extract skills from CVs. Those capabilities remain unimplemented.
 ## Security and product boundaries
 
 This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, role-based access control, private CV storage, consent and retention workflows, rate limiting, automated tests and production deployment still need to be implemented. Use test records only until those protections are in place.
