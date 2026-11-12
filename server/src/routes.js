@@ -1,9 +1,19 @@
 import { Router } from 'express';
 import { pool, logActivity } from './db.js';
 import { CANDIDATE_STAGES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
+import { calculateSkillMatch } from './matching.js';
 
 const router = Router();
+
 const stages = CANDIDATE_STAGES;
+
+// Preview only: compares structured skill lists without storing candidate data.
+router.post('/matching/preview', (req, res) => {
+  const { candidateSkills, requiredSkills } = req.body ?? {};
+  const result = calculateSkillMatch(candidateSkills, requiredSkills);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ match: result });
+});
 
 // Dashboard data is calculated from PostgreSQL, never from hard-coded demo metrics.
 router.get('/dashboard', async (_req, res, next) => {
