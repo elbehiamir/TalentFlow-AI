@@ -125,6 +125,7 @@ function App() {
     try {
       await apiRequest('/auth/logout', { method: 'POST' });
       setUser(null);
+      setActive('Overview');
       setCandidates([]);
       setJobs([]);
       setDashboard(null);
