@@ -35,7 +35,9 @@ test('signed session contains only safe user claims and verifies', () => {
 test('expired, tampered and wrong-secret sessions are rejected', () => {
   const expired = createAccessToken(user, secret, Date.now() - 9 * 60 * 60 * 1000);
   const valid = createAccessToken(user, secret);
-  const tampered = valid.slice(0, -1) + (valid.endsWith('a') ? 'b' : 'a');
+  const parts = valid.split('.');
+  const changedSignature = (parts[2][0] === 'a' ? 'b' : 'a') + parts[2].slice(1);
+  const tampered = parts[0] + '.' + parts[1] + '.' + changedSignature;
   assert.equal(verifyAccessToken(expired, secret), null);
   assert.equal(verifyAccessToken(tampered, secret), null);
   assert.equal(verifyAccessToken(valid, 'another-secret-that-is-also-long-enough'), null);
