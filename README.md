@@ -96,7 +96,7 @@ Roles:
 - **recruiter**: can view, create and update candidates and jobs, and read the activity log.
 - **hiring_manager**: read-only access to recruitment records and dashboard data; the activity log is hidden.
 
-## Run API validation tests
+## Run backend tests
 
 The backend uses Node's built-in test runner; no additional test framework is required.
 
