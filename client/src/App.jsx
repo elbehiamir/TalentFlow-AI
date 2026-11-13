@@ -3,7 +3,7 @@ import {
   Activity, ArrowUpRight, Bell, BriefcaseBusiness, CalendarDays, ChevronDown,
   CircleHelp, Download, FileText, Filter, LayoutDashboard, Menu, MoreHorizontal,
   Plus, Search, Settings, ShieldCheck, Sparkles, Users, X, Trash2, Pencil,
-  RefreshCw, UserRoundPlus
+  RefreshCw, UserRoundPlus, LogOut
 } from 'lucide-react';
 import { apiRequest } from './api.js';
 
@@ -28,8 +28,51 @@ function Modal({ title, onClose, children }) {
   </div>;
 }
 
+
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async event => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const result = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+      onLogin(result.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <main className="auth-shell">
+    <section className="auth-card">
+      <div className="auth-brand"><div className="brand-mark"><Sparkles size={19}/></div><span>talentflow<span className="brand-ai">.ai</span></span></div>
+      <span className="auth-eyebrow">SECURE RECRUITMENT WORKSPACE</span>
+      <h1>Welcome back</h1>
+      <p>Sign in to manage your hiring workspace.</p>
+      <form className="auth-form" onSubmit={submit}>
+        <label>Work email<input type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} placeholder="you@company.com"/></label>
+        <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} placeholder="Your password"/></label>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <button className="button primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in securely'}</button>
+      </form>
+      <div className="auth-note"><ShieldCheck size={15}/> Only authorized workspace members can access candidate records.</div>
+    </section>
+  </main>;
+}
+
 function App() {
   const [active, setActive] = useState('Overview');
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,6 +91,15 @@ function App() {
 
   const notify = message => { setNotice(message); window.setTimeout(() => setNotice(''), 3500); };
 
+  useEffect(() => {
+    let mounted = true;
+    apiRequest('/auth/me')
+      .then(data => { if (mounted) setUser(data.user); })
+      .catch(() => { if (mounted) setUser(null); })
+      .finally(() => { if (mounted) setAuthChecking(false); });
+    return () => { mounted = false; };
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -64,7 +116,20 @@ function App() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (user) loadData(); }, [loadData, user]);
+
+  const logout = async () => {
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' });
+      setUser(null);
+      setCandidates([]);
+      setJobs([]);
+      setDashboard(null);
+      setActivities([]);
+    } catch (err) {
+      notify(err.message);
+    }
+  };
 
   const filtered = useMemo(() => candidates.filter(c => {
     const text = `${c.name} ${c.email} ${c.role} ${c.stage}`.toLowerCase();
@@ -136,6 +201,9 @@ function App() {
   const total = dashboard?.metrics?.totalCandidates ?? 0;
   const pipelineMax = Math.max(1, ...stageCounts.map(s => s.total));
 
+  if (authChecking) return <div className="auth-loading">Checking secure session…</div>;
+  if (!user) return <LoginScreen onLogin={setUser}/>;
+
   return <div className="app-shell">
     <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
       <div className="brand"><div className="brand-mark"><Sparkles size={19}/></div><span>talentflow<span className="brand-ai">.ai</span></span><button className="mobile-close" onClick={() => setMenuOpen(false)}><X size={18}/></button></div>
@@ -145,12 +213,12 @@ function App() {
       <div className="sidebar-bottom">
         <div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><strong>Need a hand?</strong><p>Manage candidates and vacancies from one workspace.</p><button onClick={() => notify('Help center will be available soon.')}>Help center <ArrowUpRight size={13}/></button></div>
         <button className={active === 'Settings' ? 'nav-item selected' : 'nav-item'} onClick={() => setActive('Settings')}><Settings size={18}/><span>Settings</span></button>
-        <div className="profile"><div className="profile-avatar">TF</div><span><strong>Workspace admin</strong><small>Administrator</small></span><MoreHorizontal size={19}/></div>
+        <div className="profile"><div className="profile-avatar">TF</div><span><strong>{user.email}</strong><small>{user.role.replaceAll("_", " ")}</small></span><MoreHorizontal size={19}/></div>
       </div>
     </aside>
 
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)}><Menu/></button><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Activity notifications" onClick={() => setActive('Activity')}><Bell size={18}/>{activities.length > 0 && <i/>}</button><div className="top-divider"/><div className="top-user">TF</div></div></header>
+      <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)}><Menu/></button><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Activity notifications" onClick={() => setActive('Activity')}><Bell size={18}/>{activities.length > 0 && <i/>}</button><div className="top-divider"/><div className="top-user">TF</div><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={16}/><span>Sign out</span></button></div></header>
       <div className="content">
         <section className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> LIVE DATABASE</div><h1>{active === 'Overview' ? 'Hiring overview' : active}</h1><p>{active === 'Overview' ? 'Your recruitment activity, updated from PostgreSQL.' : `Manage your ${active.toLowerCase()} workspace.`}</p></div><div className="welcome-actions"><button className="button secondary" onClick={exportCsv}><Download size={16}/> Export CSV</button><button className="button primary" onClick={() => active === 'Job openings' ? setModal('job') : openCandidate()}><Plus size={17}/>{active === 'Job openings' ? 'Create job' : 'Add candidate'}</button></div></section>
 
