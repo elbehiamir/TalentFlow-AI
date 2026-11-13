@@ -55,7 +55,12 @@ DATABASE_URL=postgresql://YOUR_POSTGRES_USER:YOUR_PASSWORD@localhost:5432/talent
 CLIENT_URL=http://localhost:5173
 PORT=5000
 DATABASE_SSL=false
+JWT_SECRET=<output of openssl rand -hex 32>
+BOOTSTRAP_ADMIN_EMAIL=admin@your-company.example
+BOOTSTRAP_ADMIN_PASSWORD=<unique password of at least 12 characters>
 ```
+
+Use your own administrator email and a unique password; never commit the populated `.env` file.
 
 Then start the API:
 
@@ -89,7 +94,7 @@ There is no public registration endpoint. An administrator can create recruiter 
 Roles:
 - **admin**: full access, including user provisioning and deleting records.
 - **recruiter**: can view, create and update candidates and jobs, and read the activity log.
-- **hiring_manager**: read-only access to recruitment records and dashboard data.
+- **hiring_manager**: read-only access to recruitment records and dashboard data; the activity log is hidden.
 
 ## Run API validation tests
 
@@ -119,7 +124,7 @@ npm test
 - `GET /api/activity`
 - `POST /api/matching/preview`
 
-All routes except the health check and login require the session cookie. Role restrictions are enforced by the API, not only by the interface.
+All routes except the health check, login and logout require the session cookie. Role restrictions are enforced by the API, not only by the interface.
 
 ## Explainable skill matching preview
 
