@@ -23,6 +23,15 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      email VARCHAR(254) NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role VARCHAR(30) NOT NULL CHECK (role IN ('admin', 'recruiter', 'hiring_manager')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS candidates (
       id BIGSERIAL PRIMARY KEY,
       name VARCHAR(160) NOT NULL,
