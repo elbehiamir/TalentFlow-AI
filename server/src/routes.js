@@ -2,10 +2,39 @@ import { Router } from 'express';
 import { pool, logActivity } from './db.js';
 import { CANDIDATE_STAGES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
 import { calculateSkillMatch } from './matching.js';
+import { hashPassword, requireRoles } from './auth.js';
 
 const router = Router();
 
 const stages = CANDIDATE_STAGES;
+const readerRoles = ['admin', 'recruiter', 'hiring_manager'];
+const editorRoles = ['admin', 'recruiter'];
+
+router.post('/users', requireRoles('admin'), async (req, res, next) => {
+  try {
+    const email = cleanString(req.body?.email, 254).toLowerCase();
+    const password = req.body?.password;
+    const role = req.body?.role;
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: 'Password must contain between 12 and 128 characters.' });
+    }
+    if (!['recruiter', 'hiring_manager'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be recruiter or hiring_manager.' });
+    }
+    const passwordHash = await hashPassword(password);
+    const result = await pool.query(
+      'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
+      [email, passwordHash, role]
+    );
+    res.status(201).json({ user: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'A user with this email already exists.' });
+    next(error);
+  }
+});
 
 // Preview only: compares structured skill lists without storing candidate data.
 router.post('/matching/preview', (req, res) => {
@@ -16,7 +45,7 @@ router.post('/matching/preview', (req, res) => {
 });
 
 // Dashboard data is calculated from PostgreSQL, never from hard-coded demo metrics.
-router.get('/dashboard', async (_req, res, next) => {
+router.get('/dashboard', requireRoles(...readerRoles), async (_req, res, next) => {
   try {
     const [candidateCount, jobCount, interviews, stagesResult, recent, sources] = await Promise.all([
       pool.query('SELECT COUNT(*)::int AS total FROM candidates'),
@@ -42,7 +71,7 @@ router.get('/dashboard', async (_req, res, next) => {
 });
 
 // Candidates
-router.get('/candidates', async (req, res, next) => {
+router.get('/candidates', requireRoles(...readerRoles), async (req, res, next) => {
   try {
     const search = cleanString(req.query.search, 160);
     const stage = cleanString(req.query.stage, 30);
@@ -59,7 +88,7 @@ router.get('/candidates', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/candidates', async (req, res, next) => {
+router.post('/candidates', requireRoles(...editorRoles), async (req, res, next) => {
   try {
     const parsed = parseCandidateInput(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
@@ -79,7 +108,7 @@ router.post('/candidates', async (req, res, next) => {
   }
 });
 
-router.patch('/candidates/:id', async (req, res, next) => {
+router.patch('/candidates/:id', requireRoles(...editorRoles), async (req, res, next) => {
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid candidate id.' });
@@ -103,7 +132,7 @@ router.patch('/candidates/:id', async (req, res, next) => {
   }
 });
 
-router.delete('/candidates/:id', async (req, res, next) => {
+router.delete('/candidates/:id', requireRoles('admin'), async (req, res, next) => {
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid candidate id.' });
@@ -115,7 +144,7 @@ router.delete('/candidates/:id', async (req, res, next) => {
 });
 
 // Job openings
-router.get('/jobs', async (_req, res, next) => {
+router.get('/jobs', requireRoles(...readerRoles), async (_req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT j.id, j.title, j.team, j.location, j.status, j.created_at,
@@ -127,7 +156,7 @@ router.get('/jobs', async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/jobs', async (req, res, next) => {
+router.post('/jobs', requireRoles(...editorRoles), async (req, res, next) => {
   try {
     const parsed = parseJobInput(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
@@ -141,7 +170,7 @@ router.post('/jobs', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.patch('/jobs/:id', async (req, res, next) => {
+router.patch('/jobs/:id', requireRoles(...editorRoles), async (req, res, next) => {
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid job id.' });
@@ -160,7 +189,7 @@ router.patch('/jobs/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.delete('/jobs/:id', async (req, res, next) => {
+router.delete('/jobs/:id', requireRoles('admin'), async (req, res, next) => {
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid job id.' });
@@ -171,7 +200,7 @@ router.delete('/jobs/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/activity', async (_req, res, next) => {
+router.get('/activity', requireRoles('admin', 'recruiter'), async (_req, res, next) => {
   try {
     const result = await pool.query('SELECT id, action, entity_type, entity_id, description, created_at FROM activity_logs ORDER BY created_at DESC LIMIT 100');
     res.json({ activities: result.rows });
