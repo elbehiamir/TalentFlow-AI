@@ -198,13 +198,13 @@ function App() {
     { label: 'Job openings', icon: BriefcaseBusiness },
     { label: 'CV analysis', icon: FileText },
     { label: 'Activity', icon: Activity }
-  ].filter(item => item.label !== 'Activity' || user.role !== 'hiring_manager');
+  ].filter(item => item.label !== 'Activity' || user?.role !== 'hiring_manager');
 
   const stageCounts = dashboard?.pipeline || [];
   const total = dashboard?.metrics?.totalCandidates ?? 0;
   const pipelineMax = Math.max(1, ...stageCounts.map(s => s.total));
-  const canManage = user.role === 'admin' || user.role === 'recruiter';
-  const canDelete = user.role === 'admin';
+  const canManage = user?.role === 'admin' || user?.role === 'recruiter';
+  const canDelete = user?.role === 'admin';
 
   if (authChecking) return <div className="auth-loading">Checking secure session…</div>;
   if (!user) return <LoginScreen onLogin={setUser}/>;
