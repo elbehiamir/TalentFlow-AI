@@ -15,7 +15,7 @@ router.post('/users', requireRoles('admin'), async (req, res, next) => {
     const email = cleanString(req.body?.email, 254).toLowerCase();
     const password = req.body?.password;
     const role = req.body?.role;
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Enter a valid email address.' });
     }
     if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
