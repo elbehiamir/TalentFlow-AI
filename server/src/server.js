@@ -55,7 +55,7 @@ async function start() {
     }
     app.listen(port, () => console.log(`TalentFlow AI API listening on http://localhost:${port}`));
   } catch (error) {
-    console.error('Database initialization failed:', error.message);
+    console.error('TalentFlow AI startup failed:', error.message);
     process.exit(1);
   }
 }
