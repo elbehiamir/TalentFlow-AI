@@ -75,6 +75,22 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+## Authentication setup
+
+The API now requires an authenticated workspace session for recruitment data. Before starting the server:
+
+1. Generate a private signing secret with `openssl rand -hex 32` and place the output in `JWT_SECRET` in `server/.env`.
+2. Set both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` for the first startup. The initial password must contain at least 12 characters.
+3. Start the API. It creates the first administrator only if that email is not already registered. It never resets an existing account's password.
+4. Remove `BOOTSTRAP_ADMIN_PASSWORD` from the runtime environment after the administrator has been created.
+
+There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in uses an eight-hour, HttpOnly, SameSite=Lax session cookie; production mode also marks it Secure. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
+
+Roles:
+- **admin**: full access, including user provisioning and deleting records.
+- **recruiter**: can view, create and update candidates and jobs, and read the activity log.
+- **hiring_manager**: read-only access to recruitment records and dashboard data.
+
 ## Run API validation tests
 
 The backend uses Node's built-in test runner; no additional test framework is required.
@@ -86,18 +102,24 @@ npm test
 
 ## API routes
 
-- `GET /api/health`
-- `GET /api/dashboard`
+- `GET /api/health` (public health check)
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `POST /api/users` (administrator only; creates recruiter or hiring-manager accounts)
+- `GET /api/dashboard` (authenticated)
 - `GET /api/candidates?search=&stage=`
 - `POST /api/candidates`
 - `PATCH /api/candidates/:id`
-- `DELETE /api/candidates/:id`
+- `DELETE /api/candidates/:id` (administrator only)
 - `GET /api/jobs`
 - `POST /api/jobs`
 - `PATCH /api/jobs/:id`
-- `DELETE /api/jobs/:id`
+- `DELETE /api/jobs/:id` (administrator only)
 - `GET /api/activity`
 - `POST /api/matching/preview`
+
+All routes except the health check and login require the session cookie. Role restrictions are enforced by the API, not only by the interface.
 
 ## Explainable skill matching preview
 
@@ -121,6 +143,6 @@ The preview does not upload files, store candidate details or extract skills fro
 
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, role-based access control, private CV storage, consent and retention workflows, rate limiting, API integration tests and production deployment still need to be implemented. The current Node test suite covers validation and the deterministic matching function. Use test records only until those protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing and API role checks are now implemented, but login rate limiting, private CV storage, consent and retention workflows, API integration tests and production deployment review remain outstanding. The current Node test suite covers password/session primitives, validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
