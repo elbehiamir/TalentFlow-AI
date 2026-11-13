@@ -104,8 +104,11 @@ function App() {
     setLoading(true);
     setError('');
     try {
+      const activityRequest = user?.role === 'hiring_manager'
+        ? Promise.resolve({ activities: [] })
+        : apiRequest('/activity');
       const [dash, candidateData, jobData, activityData] = await Promise.all([
-        apiRequest('/dashboard'), apiRequest('/candidates'), apiRequest('/jobs'), apiRequest('/activity')
+        apiRequest('/dashboard'), apiRequest('/candidates'), apiRequest('/jobs'), activityRequest
       ]);
       setDashboard(dash);
       setCandidates(candidateData.candidates || []);
@@ -114,7 +117,7 @@ function App() {
     } catch (err) {
       setError(err.message + ' — vérifie que PostgreSQL et le serveur API sont démarrés.');
     } finally { setLoading(false); }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => { if (user) loadData(); }, [loadData, user]);
 
@@ -195,11 +198,13 @@ function App() {
     { label: 'Job openings', icon: BriefcaseBusiness },
     { label: 'CV analysis', icon: FileText },
     { label: 'Activity', icon: Activity }
-  ];
+  ].filter(item => item.label !== 'Activity' || user.role !== 'hiring_manager');
 
   const stageCounts = dashboard?.pipeline || [];
   const total = dashboard?.metrics?.totalCandidates ?? 0;
   const pipelineMax = Math.max(1, ...stageCounts.map(s => s.total));
+  const canManage = user.role === 'admin' || user.role === 'recruiter';
+  const canDelete = user.role === 'admin';
 
   if (authChecking) return <div className="auth-loading">Checking secure session…</div>;
   if (!user) return <LoginScreen onLogin={setUser}/>;
@@ -218,9 +223,9 @@ function App() {
     </aside>
 
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)}><Menu/></button><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Activity notifications" onClick={() => setActive('Activity')}><Bell size={18}/>{activities.length > 0 && <i/>}</button><div className="top-divider"/><div className="top-user">TF</div><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={16}/><span>Sign out</span></button></div></header>
+      <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)}><Menu/></button><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions">{user.role !== 'hiring_manager' && <><button className="icon-button" aria-label="Activity notifications" onClick={() => setActive('Activity')}><Bell size={18}/>{activities.length > 0 && <i/>}</button><div className="top-divider"/></>}<div className="top-user">TF</div><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={16}/><span>Sign out</span></button></div></header>
       <div className="content">
-        <section className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> LIVE DATABASE</div><h1>{active === 'Overview' ? 'Hiring overview' : active}</h1><p>{active === 'Overview' ? 'Your recruitment activity, updated from PostgreSQL.' : `Manage your ${active.toLowerCase()} workspace.`}</p></div><div className="welcome-actions"><button className="button secondary" onClick={exportCsv}><Download size={16}/> Export CSV</button><button className="button primary" onClick={() => active === 'Job openings' ? setModal('job') : openCandidate()}><Plus size={17}/>{active === 'Job openings' ? 'Create job' : 'Add candidate'}</button></div></section>
+        <section className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> LIVE DATABASE</div><h1>{active === 'Overview' ? 'Hiring overview' : active}</h1><p>{active === 'Overview' ? 'Your recruitment activity, updated from PostgreSQL.' : `Manage your ${active.toLowerCase()} workspace.`}</p></div><div className="welcome-actions"><button className="button secondary" onClick={exportCsv}><Download size={16}/> Export CSV</button>{canManage && <button className="button primary" onClick={() => active === 'Job openings' ? setModal('job') : openCandidate()}><Plus size={17}/>{active === 'Job openings' ? 'Create job' : 'Add candidate'}</button>}</div></section>
 
         {error && <div className="error-banner"><strong>Database connection unavailable</strong><span>{error}</span><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Retry</button></div>}
         {loading && <div className="loading-line"><RefreshCw size={16}/> Loading data from database…</div>}
@@ -237,14 +242,14 @@ function App() {
             <article className="panel source-panel"><div className="panel-heading"><div><h2>Recent activity</h2><p>Latest changes saved to the database</p></div><button className="text-button" onClick={() => setActive('Activity')}>View all <ArrowUpRight size={14}/></button></div><div className="activity-preview">{activities.slice(0,5).map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{new Date(item.created_at).toLocaleString()}</small></div></div>)}{!activities.length && <p className="empty-state">No activity recorded yet.</p>}</div></article>
           </section>
           <section className="bottom-grid">
-            <article className="panel candidates-panel"><div className="panel-heading"><div><h2>Recent candidates</h2><p>Latest records from PostgreSQL</p></div><button className="text-button" onClick={() => setActive('Candidates')}>View all <ArrowUpRight size={14}/></button></div><CandidateTable rows={(dashboard?.recentCandidates || []).slice(0,5)} onEdit={openCandidate} onDelete={deleteCandidate}/></article>
-            <JobPanel jobs={jobs.slice(0,4)} onCreate={() => setModal('job')} onToggle={changeJobStatus}/>
+            <article className="panel candidates-panel"><div className="panel-heading"><div><h2>Recent candidates</h2><p>Latest records from PostgreSQL</p></div><button className="text-button" onClick={() => setActive('Candidates')}>View all <ArrowUpRight size={14}/></button></div><CandidateTable rows={(dashboard?.recentCandidates || []).slice(0,5)} onEdit={openCandidate} onDelete={deleteCandidate} canEdit={canManage} canDelete={canDelete}/></article>
+            <JobPanel jobs={jobs.slice(0,4)} onCreate={() => setModal('job')} onToggle={changeJobStatus} canManage={canManage}/>
           </section>
         </>}
 
-        {active === 'Candidates' && <section className="panel candidates-panel full-panel"><div className="panel-heading"><div><h2>All candidates</h2><p>{candidates.length} records stored in your database</p></div><button className="button primary" onClick={() => openCandidate()}><UserRoundPlus size={15}/> Add candidate</button></div><div className="table-toolbar"><div className="search-box"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, email or role..."/></div><select className="filter-button" value={stageFilter} onChange={e=>setStageFilter(e.target.value)}><option value="">All stages</option>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div><CandidateTable rows={filtered} onEdit={openCandidate} onDelete={deleteCandidate}/></section>}
+        {active === 'Candidates' && <section className="panel candidates-panel full-panel"><div className="panel-heading"><div><h2>All candidates</h2><p>{candidates.length} records stored in your database</p></div>{canManage && <button className="button primary" onClick={() => openCandidate()}><UserRoundPlus size={15}/> Add candidate</button>}</div><div className="table-toolbar"><div className="search-box"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, email or role..."/></div><select className="filter-button" value={stageFilter} onChange={e=>setStageFilter(e.target.value)}><option value="">All stages</option>{STAGES.map(s=><option key={s}>{s}</option>)}</select></div><CandidateTable rows={filtered} onEdit={openCandidate} onDelete={deleteCandidate} canEdit={canManage} canDelete={canDelete}/></section>}
 
-        {active === 'Job openings' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Job openings</h2><p>{jobs.length} vacancies saved in PostgreSQL</p></div><button className="button primary" onClick={() => setModal('job')}><Plus size={15}/> Create job</button></div><JobPanel jobs={jobs} onCreate={() => setModal('job')} onToggle={changeJobStatus}/></section>}
+        {active === 'Job openings' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Job openings</h2><p>{jobs.length} vacancies saved in PostgreSQL</p></div>{canManage && <button className="button primary" onClick={() => setModal('job')}><Plus size={15}/> Create job</button>}</div><JobPanel jobs={jobs} onCreate={() => setModal('job')} onToggle={changeJobStatus} canManage={canManage}/></section>}
 
         {active === 'Activity' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Activity log</h2><p>Audit trail of candidate and job changes</p></div><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Refresh</button></div><div className="activity-list">{activities.map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{item.entity_type} · {new Date(item.created_at).toLocaleString()}</small></div><span className="activity-action">{item.action}</span></div>)}{!activities.length && <p className="empty-state">No activity yet. Add a candidate or job to start the log.</p>}</div></section>}
 
@@ -264,12 +269,12 @@ function App() {
   </div>;
 }
 
-function CandidateTable({ rows, onEdit, onDelete }) {
-  return <div className="candidate-table"><div className="table-head"><span>Candidate</span><span>Applied for</span><span>Stage</span><span>Fit indicator</span><span>Actions</span></div>{rows.map(c=><div className="candidate-row" key={c.id}><div className="candidate-person"><div className="candidate-avatar violet">{String(c.name || '?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase()}</div><div><strong>{c.name}</strong><small>{c.email || new Date(c.created_at).toLocaleDateString()}</small></div></div><span className="candidate-role">{c.role}</span><span><i className={`stage-dot stage-${String(c.stage).toLowerCase()}`}/>{c.stage}</span><div className="fit-cell"><div className="fit-track"><i style={{width:`${c.score}%`}}/></div><strong>{c.score}%</strong></div><div className="row-actions"><button className="row-more" aria-label="Edit candidate" onClick={()=>onEdit(c)}><Pencil size={15}/></button><button className="row-more danger-action" aria-label="Delete candidate" onClick={()=>onDelete(c.id)}><Trash2 size={15}/></button></div></div>)}{!rows.length && <p className="empty-state">No candidates found. Add your first candidate.</p>}<div className="table-note"><ShieldCheck size={14}/> Candidate records are stored in PostgreSQL. Fit scores are decision-support signals only.</div></div>;
+function CandidateTable({ rows, onEdit, onDelete, canEdit = true, canDelete = true }) {
+  return <div className="candidate-table"><div className="table-head"><span>Candidate</span><span>Applied for</span><span>Stage</span><span>Fit indicator</span>{(canEdit || canDelete) && <span>Actions</span>}</div>{rows.map(c=><div className="candidate-row" key={c.id}><div className="candidate-person"><div className="candidate-avatar violet">{String(c.name || '?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase()}</div><div><strong>{c.name}</strong><small>{c.email || new Date(c.created_at).toLocaleDateString()}</small></div></div><span className="candidate-role">{c.role}</span><span><i className={`stage-dot stage-${String(c.stage).toLowerCase()}`}/>{c.stage}</span><div className="fit-cell"><div className="fit-track"><i style={{width:`${c.score}%`}}/></div><strong>{c.score}%</strong></div>{(canEdit || canDelete) && <div className="row-actions">{canEdit && <button className="row-more" aria-label="Edit candidate" onClick={()=>onEdit(c)}><Pencil size={15}/></button>}{canDelete && <button className="row-more danger-action" aria-label="Delete candidate" onClick={()=>onDelete(c.id)}><Trash2 size={15}/></button>}</div>}</div>)}{!rows.length && <p className="empty-state">No candidates found. Add your first candidate.</p>}<div className="table-note"><ShieldCheck size={14}/> Candidate records are stored in PostgreSQL. Fit scores are decision-support signals only.</div></div>;
 }
 
-function JobPanel({ jobs, onCreate, onToggle }) {
-  return <article className="panel openings-panel"><div className="panel-heading"><div><h2>Job openings</h2><p>Vacancies saved in the database</p></div></div><div className="opening-list">{jobs.map(j=><div className="opening-item" key={j.id}><div className="opening-icon purple"><BriefcaseBusiness size={17}/></div><div className="opening-info"><strong>{j.title}</strong><small>{j.team} · {j.location}</small><div className="opening-meta"><span><Users size={13}/>{j.applicant_count || 0} applicants</span><button className="status-toggle" onClick={()=>onToggle(j)}>{j.status} · change</button></div></div></div>)}{!jobs.length && <p className="empty-state">No job openings yet.</p>}</div><button className="button create-job" onClick={onCreate}><Plus size={15}/> Create job opening</button></article>;
+function JobPanel({ jobs, onCreate, onToggle, canManage = true }) {
+  return <article className="panel openings-panel"><div className="panel-heading"><div><h2>Job openings</h2><p>Vacancies saved in the database</p></div></div><div className="opening-list">{jobs.map(j=><div className="opening-item" key={j.id}><div className="opening-icon purple"><BriefcaseBusiness size={17}/></div><div className="opening-info"><strong>{j.title}</strong><small>{j.team} · {j.location}</small><div className="opening-meta"><span><Users size={13}/>{j.applicant_count || 0} applicants</span>{canManage && <button className="status-toggle" onClick={()=>onToggle(j)}>{j.status} · change</button>}</div></div></div>)}{!jobs.length && <p className="empty-state">No job openings yet.</p>}</div>{canManage && <button className="button create-job" onClick={onCreate}><Plus size={15}/> Create job opening</button>}</article>;
 }
 
 export default App;
