@@ -89,7 +89,7 @@ The API now requires an authenticated workspace session for recruitment data. Be
 3. Start the API. It creates the first administrator only if that email is not already registered. It never resets an existing account's password.
 4. Remove `BOOTSTRAP_ADMIN_PASSWORD` from the runtime environment after the administrator has been created.
 
-There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in uses an eight-hour, HttpOnly, SameSite=Lax session cookie; production mode also marks it Secure. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
+There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in uses an eight-hour, HttpOnly, SameSite=Lax session cookie; production mode also marks it Secure. Failed sign-in attempts are limited to 10 per client IP in a 15-minute window, with a `Retry-After` response when blocked. This limiter is in-memory and applies per API process; production deployments with multiple instances should replace it with a shared store such as Redis. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
 
 Roles:
 - **admin**: full access, including user provisioning and deleting records.
@@ -148,6 +148,6 @@ The preview does not upload files, store candidate details or extract skills fro
 
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing and API role checks are now implemented, but login rate limiting, private CV storage, consent and retention workflows, API integration tests and production deployment review remain outstanding. The current Node test suite covers password/session primitives, validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks and an in-memory failed-login limiter are implemented. Private CV storage, consent and retention workflows, HTTP/PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The current Node test suite covers password/session primitives, validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
