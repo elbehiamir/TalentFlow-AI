@@ -91,6 +91,8 @@ The API now requires an authenticated workspace session for recruitment data. Be
 
 There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in uses an eight-hour, HttpOnly, SameSite=Lax session cookie; production mode also marks it Secure. Failed sign-in attempts are limited to 10 per client IP in a 15-minute window, with a `Retry-After` response when blocked. This limiter is in-memory and applies per API process; production deployments with multiple instances should replace it with a shared store such as Redis. When running behind a reverse proxy, configure Express `trust proxy` only for the known proxy hops so `req.ip` identifies the client safely; never trust arbitrary forwarded headers. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
 
+For browser-session requests, every state-changing method (`POST`, `PUT`, `PATCH`, `DELETE`) must include an `Origin` header that exactly matches `CLIENT_URL`. Missing or mismatched origins are rejected with HTTP 403. Keep the frontend and API origin configuration aligned. Do not disable this check to accommodate a future mobile or server-to-server client; add a separately designed authentication mechanism for those clients.
+
 Roles:
 - **admin**: full access, including user provisioning and deleting records.
 - **recruiter**: can view, create and update candidates and jobs, and read the activity log.
@@ -148,6 +150,6 @@ The preview does not upload files, store candidate details or extract skills fro
 
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks and an in-memory failed-login limiter are implemented. Private CV storage, consent and retention workflows, HTTP/PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The current Node test suite covers password/session primitives, validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks, strict Origin checks for state-changing browser requests and an in-memory failed-login limiter are implemented. Private CV storage, consent and retention workflows, HTTP/PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The current Node test suite covers password/session primitives, validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
