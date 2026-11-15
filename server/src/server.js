@@ -6,6 +6,7 @@ import { initializeDatabase, pool } from './db.js';
 import apiRoutes from './routes.js';
 import { createAuthMiddleware, bootstrapAdmin } from './auth.js';
 import { createAuthRouter } from './auth-routes.js';
+import { createOriginGuard } from './origin-guard.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -17,14 +18,7 @@ const allowedOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigin, credentials: true }));
-app.use((req, res, next) => {
-  const unsafeMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
-  const requestOrigin = req.get('origin');
-  if (unsafeMethod && requestOrigin && requestOrigin !== allowedOrigin) {
-    return res.status(403).json({ error: 'Request origin is not allowed.' });
-  }
-  next();
-});
+app.use(createOriginGuard(allowedOrigin));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', async (_req, res) => {
