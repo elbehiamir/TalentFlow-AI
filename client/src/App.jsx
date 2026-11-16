@@ -77,7 +77,7 @@ function CVAnalysisPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const splitSkills = value => value.split(/[\\n,]/).map(skill => skill.trim()).filter(Boolean);
+  const splitSkills = value => value.split(String.fromCharCode(10)).flatMap(line => line.split(',')).map(skill => skill.trim()).filter(Boolean);
 
   const analyze = async event => {
     event.preventDefault();
