@@ -69,6 +69,84 @@ function LoginScreen({ onLogin }) {
   </main>;
 }
 
+
+function CVAnalysisPanel() {
+  const [candidateInput, setCandidateInput] = useState('');
+  const [requiredInput, setRequiredInput] = useState('');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const splitSkills = value => value.split(/[\\n,]/).map(skill => skill.trim()).filter(Boolean);
+
+  const analyze = async event => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setResult(null);
+    try {
+      const response = await apiRequest('/matching/preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          candidateSkills: splitSkills(candidateInput),
+          requiredSkills: splitSkills(requiredInput)
+        })
+      });
+      setResult(response.match);
+    } catch (err) {
+      setError(err.message || 'Unable to calculate skill coverage.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const groups = result ? [
+    { title: 'Matched skills', items: result.matchedSkills, tone: 'matched', empty: 'No exact matches.' },
+    { title: 'Missing required skills', items: result.missingSkills, tone: 'missing', empty: 'No missing required skills.' },
+    { title: 'Additional skills', items: result.additionalSkills, tone: 'additional', empty: 'No additional skills listed.' }
+  ] : [];
+
+  return <div className="analysis-layout">
+    <section className="panel full-panel analysis-input-panel">
+      <div className="panel-heading">
+        <div><h2>Explainable skill coverage</h2><p>Compare a candidate skill list with a role's requirements</p></div>
+        <span className="analysis-tag">Decision support</span>
+      </div>
+      <form className="analysis-form" onSubmit={analyze}>
+        <label>Candidate skills
+          <textarea rows="7" value={candidateInput} onChange={event => setCandidateInput(event.target.value)} placeholder={'React\nNode.js\nAccessibility'} />
+        </label>
+        <label>Required skills for the role
+          <textarea rows="7" value={requiredInput} onChange={event => setRequiredInput(event.target.value)} placeholder={'React\nPostgreSQL\nNode.js'} required />
+        </label>
+        <p className="analysis-form-note">Enter one skill per line or separate skills with commas. Only these skill labels are sent to the API; no CV file is uploaded or stored.</p>
+        {error && <div className="auth-error analysis-form-message" role="alert">{error}</div>}
+        <button className="button primary analysis-submit" disabled={busy}>
+          <Sparkles size={15}/>{busy ? 'Calculating…' : 'Calculate skill coverage'}
+        </button>
+      </form>
+    </section>
+
+    {result && <section className="panel full-panel analysis-result" aria-live="polite">
+      <div className="panel-heading"><div><h2>Matching breakdown</h2><p>Every item below comes from the two lists you entered</p></div></div>
+      <div className="analysis-summary">
+        <div className="coverage-score"><strong>{result.skillCoveragePercent}%</strong><span>required skill coverage</span></div>
+        <div className="coverage-count"><strong>{result.matchedCount} / {result.requiredCount}</strong><span>required skills matched exactly</span></div>
+      </div>
+      <div className="analysis-skill-groups">
+        {groups.map(group => <div className="analysis-skill-group" key={group.title}>
+          <h3>{group.title}</h3>
+          <div className="skill-pill-list">
+            {group.items.length ? group.items.map(skill => <span className={'skill-pill ' + group.tone} key={skill}>{skill}</span>) : <span className="skill-empty">{group.empty}</span>}
+          </div>
+        </div>)}
+      </div>
+      <div className="analysis-explanation"><strong>How the score is calculated</strong><p>{result.explanation}</p><small>{result.method}. {result.limitation}</small></div>
+      <p className="analysis-disclaimer">This is a deterministic comparison of skill names, not a hiring recommendation. Review experience, proficiency and evidence manually before making any decision.</p>
+    </section>}
+  </div>;
+}
+
 function App() {
   const [active, setActive] = useState('Overview');
   const [user, setUser] = useState(null);
@@ -226,7 +304,7 @@ function App() {
     <main className="main-area">
       <header className="topbar"><button className="mobile-menu" onClick={() => setMenuOpen(true)}><Menu/></button><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions">{user.role !== 'hiring_manager' && <><button className="icon-button" aria-label="Activity notifications" onClick={() => setActive('Activity')}><Bell size={18}/>{activities.length > 0 && <i/>}</button><div className="top-divider"/></>}<div className="top-user">TF</div><button className="logout-button" onClick={logout} title="Sign out"><LogOut size={16}/><span>Sign out</span></button></div></header>
       <div className="content">
-        <section className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> LIVE DATABASE</div><h1>{active === 'Overview' ? 'Hiring overview' : active}</h1><p>{active === 'Overview' ? 'Your recruitment activity, updated from PostgreSQL.' : `Manage your ${active.toLowerCase()} workspace.`}</p></div><div className="welcome-actions"><button className="button secondary" onClick={exportCsv}><Download size={16}/> Export CSV</button>{canManage && <button className="button primary" onClick={() => active === 'Job openings' ? setModal('job') : openCandidate()}><Plus size={17}/>{active === 'Job openings' ? 'Create job' : 'Add candidate'}</button>}</div></section>
+        <section className="welcome-row"><div><div className="eyebrow"><span className="live-dot"/> LIVE DATABASE</div><h1>{active === 'Overview' ? 'Hiring overview' : active}</h1><p>{active === 'Overview' ? 'Your recruitment activity, updated from PostgreSQL.' : `Manage your ${active.toLowerCase()} workspace.`}</p></div><div className="welcome-actions"><button className="button secondary" onClick={exportCsv}><Download size={16}/> Export CSV</button>{canManage && ['Overview', 'Candidates'].includes(active) && <button className="button primary" onClick={() => openCandidate()}><Plus size={17}/>Add candidate</button>}{canManage && active === 'Job openings' && <button className="button primary" onClick={() => setModal('job')}><Plus size={17}/>Create job</button>}</div></section>
 
         {error && <div className="error-banner"><strong>Database connection unavailable</strong><span>{error}</span><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Retry</button></div>}
         {loading && <div className="loading-line"><RefreshCw size={16}/> Loading data from database…</div>}
@@ -254,7 +332,7 @@ function App() {
 
         {active === 'Activity' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Activity log</h2><p>Audit trail of candidate and job changes</p></div><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Refresh</button></div><div className="activity-list">{activities.map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{item.entity_type} · {new Date(item.created_at).toLocaleString()}</small></div><span className="activity-action">{item.action}</span></div>)}{!activities.length && <p className="empty-state">No activity yet. Add a candidate or job to start the log.</p>}</div></section>}
 
-        {active === 'CV analysis' && <section className="panel full-panel feature-panel"><div className="feature-symbol"><FileText size={25}/></div><h2>CV analysis workspace</h2><p>La prochaine étape sera d'ajouter le dépôt sécurisé des CV, l'extraction des compétences et un matching explicable avec validation humaine.</p><span className="feature-status">Module en préparation — aucun CV n'est envoyé ou analysé pour le moment.</span></section>}
+        {active === 'CV analysis' && <CVAnalysisPanel/>}
 
         {active === 'Settings' && <section className="panel full-panel feature-panel"><div className="feature-symbol"><Settings size={25}/></div><h2>Workspace settings</h2><p>La configuration de la base de données se fait côté serveur dans <code>server/.env</code>. Ne partage jamais ce fichier ni son mot de passe.</p><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Test database connection</button></section>}
 
