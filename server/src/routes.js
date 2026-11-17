@@ -3,8 +3,10 @@ import { pool, logActivity } from './db.js';
 import { CANDIDATE_STAGES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
 import { calculateSkillMatch } from './matching.js';
 import { hashPassword, requireRoles } from './auth.js';
+import { createCvRouter } from './cv-routes.js';
 
 const router = Router();
+router.use('/cv', createCvRouter());
 
 const stages = CANDIDATE_STAGES;
 const readerRoles = ['admin', 'recruiter', 'hiring_manager'];

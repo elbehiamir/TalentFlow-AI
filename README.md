@@ -19,6 +19,7 @@ An AI-assisted applicant tracking platform for recruitment teams. Recruiters rem
 - CSV export of the currently filtered candidate list
 - API validation for candidate and job fields, allowed stages/statuses, fit-score bounds and record IDs
 - Explainable skill-coverage preview using exact normalized skill names; no hidden AI score or automatic hiring decision
+- Authenticated, memory-only PDF CV text preview with strict size/page limits; no file or candidate data is persisted
 
 The database starts empty. The dashboard does not invent candidate profiles or hiring statistics. Add records through the interface to see real data.
 
@@ -125,8 +126,15 @@ npm test
 - `DELETE /api/jobs/:id` (administrator only)
 - `GET /api/activity`
 - `POST /api/matching/preview`
+- `POST /api/cv/preview` (admin/recruiter only; multipart field `file`)
 
 All routes except the health check, login and logout require the session cookie. Role restrictions are enforced by the API, not only by the interface.
+
+## Temporary CV PDF preview
+
+The authenticated endpoint `POST /api/cv/preview` accepts one multipart PDF in the `file` field. Only administrators and recruiters can use it. Uploads are held in memory, limited to 5 MB and 5 pages, parsed with a 12-second timeout, and are not written to disk or saved in PostgreSQL. The response returns extracted text for a human to review; it does not create a candidate record. Image-only PDFs return `requiresOcr: true`; OCR is not implemented. Password-protected PDFs and files with obvious active-content or embedded-file markers are rejected.
+
+These checks are defense-in-depth, not a malware scanner or a PDF sanitizer. PDF parsing still processes untrusted input. Do not use real candidate CVs: private persistent storage, malware scanning, isolated parsing, consent and retention controls, and an integration test of the upload route are still required.
 
 ## Explainable skill matching preview
 
@@ -150,6 +158,6 @@ The preview does not upload files, store candidate details or extract skills fro
 
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks, strict Origin checks for state-changing browser requests and an in-memory failed-login limiter are implemented. Private CV storage, consent and retention workflows, HTTP/PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The current Node test suite covers password/session primitives, request-origin validation, login throttling, input validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks, strict Origin checks for state-changing browser requests and an in-memory failed-login limiter are implemented. Private persistent CV storage, malware scanning, isolated PDF parsing, consent and retention workflows, HTTP/PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The temporary CV preview is memory-only and is not a production document-management feature. The current Node test suite covers password/session primitives, request-origin validation, login throttling, input validation and deterministic skill matching; it does not yet exercise the HTTP routes or PostgreSQL. Use test records only until the remaining protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.
