@@ -9,7 +9,7 @@ An AI-assisted applicant tracking platform for recruitment teams. Recruiters rem
 - Database: PostgreSQL
 - SQL queries use parameters to avoid SQL injection.
 
-## Features connected to PostgreSQL
+## Implemented application features
 
 - Candidate list, search and stage filter
 - Create, edit and delete candidate records
@@ -154,7 +154,7 @@ Content-Type: application/json
 
 The percentage is calculated as `matched required skills / unique required skills × 100`, rounded to the nearest integer. Matching is case-insensitive and normalizes Unicode and whitespace, but it does not infer synonyms, skill proficiency, experience or seniority. Extra skills are reported separately and do not raise the percentage. The result is decision support only, not a hiring recommendation.
 
-The preview does not upload files, store candidate details or extract skills from CVs. Those capabilities remain unimplemented.
+The preview uploads a PDF only for temporary text extraction; it does not store candidate details or infer skills. Skill extraction from parsed text, candidate persistence and automatic matching from CV content remain unimplemented.
 
 ## Security and product boundaries
 
