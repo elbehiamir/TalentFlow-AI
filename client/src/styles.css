@@ -62,3 +62,20 @@
 .analysis-disclaimer{font-size:10px;line-height:1.6;color:#8b94a4;margin:12px 0 0}
 @media(max-width:760px){.analysis-form{grid-template-columns:1fr}.analysis-skill-groups{grid-template-columns:1fr}.analysis-input-panel,.analysis-result{padding:16px}}
 @media(max-width:520px){.analysis-summary{grid-template-columns:1fr 1fr}.coverage-score,.coverage-count{padding:12px}.coverage-score strong{font-size:25px}.coverage-count strong{font-size:18px}}
+
+
+/* Temporary CV PDF preview */
+.cv-upload-panel{padding:22px}
+.cv-upload-form{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:18px}
+.cv-file-control{display:grid;gap:7px;flex:1;min-width:220px;font-size:10px;font-weight:700;color:#5e687a}
+.cv-file-control input{width:100%;border:1px dashed #d8dced;border-radius:8px;padding:11px;background:#fbfcff;color:#697488;font:400 11px 'DM Sans',sans-serif}
+.cv-upload-form .button{min-height:39px}
+.cv-upload-note{flex-basis:100%;font-size:10px;line-height:1.6;color:#929bad;margin:0}
+.cv-preview-result{display:grid;gap:12px;margin-top:18px;padding-top:17px;border-top:1px solid #edf0f5}
+.cv-preview-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:10px;color:#657084}
+.cv-preview-meta strong{color:#3f4b60}
+.cv-ocr-notice{margin:0;padding:10px 12px;border-radius:7px;background:#fff7e9;color:#936b2c;font-size:10px;line-height:1.5}
+.cv-text-label{display:grid;gap:7px;font-size:10px;font-weight:700;color:#5e687a}
+.cv-text-label textarea{width:100%;resize:vertical;min-height:180px;border:1px solid #e4e8ef;border-radius:8px;padding:12px;font:400 11px/1.65 'DM Sans',sans-serif;color:#394357;background:#fbfcfe;white-space:pre-wrap}
+.cv-preview-actions{display:flex;justify-content:flex-end}
+@media(max-width:560px){.cv-upload-panel{padding:16px}.cv-upload-form{align-items:stretch}.cv-upload-form .button{justify-content:center;width:100%}.cv-file-control{min-width:100%}}

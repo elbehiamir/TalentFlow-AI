@@ -70,12 +70,65 @@ function LoginScreen({ onLogin }) {
 }
 
 
-function CVAnalysisPanel() {
+function CVAnalysisPanel({ canUpload }) {
   const [candidateInput, setCandidateInput] = useState('');
   const [requiredInput, setRequiredInput] = useState('');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cvFile, setCvFile] = useState(null);
+  const [cvPreview, setCvPreview] = useState(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [fileInputKey, setFileInputKey] = useState(0);
+
+  const chooseCv = file => {
+    setCvPreview(null);
+    setUploadError('');
+    if (!file) {
+      setCvFile(null);
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith('.pdf') || (file.type && file.type !== 'application/pdf')) {
+      setCvFile(null);
+      setUploadError('Choose a PDF file only.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setCvFile(null);
+      setUploadError('The PDF must be 5 MB or smaller.');
+      return;
+    }
+    setCvFile(file);
+  };
+
+  const uploadCv = async event => {
+    event.preventDefault();
+    if (!cvFile) {
+      setUploadError('Choose a PDF file first.');
+      return;
+    }
+    setUploadBusy(true);
+    setUploadError('');
+    setCvPreview(null);
+    try {
+      const form = new FormData();
+      form.append('file', cvFile);
+      const response = await apiRequest('/cv/preview', { method: 'POST', body: form });
+      setCvPreview(response.preview);
+    } catch (err) {
+      setUploadError(err.message || 'Unable to preview this PDF.');
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const clearCv = () => {
+    setCvFile(null);
+    setCvPreview(null);
+    setUploadError('');
+    setFileInputKey(value => value + 1);
+  };
 
   const splitSkills = value => value.split(String.fromCharCode(10)).flatMap(line => line.split(',')).map(skill => skill.trim()).filter(Boolean);
 
@@ -107,6 +160,34 @@ function CVAnalysisPanel() {
   ] : [];
 
   return <div className="analysis-layout">
+    {canUpload && <section className="panel full-panel cv-upload-panel">
+      <div className="panel-heading">
+        <div><h2>Temporary CV PDF preview</h2><p>Extract selectable text for a human review</p></div>
+        <span className="analysis-tag">Memory only</span>
+      </div>
+      <form className="cv-upload-form" onSubmit={uploadCv}>
+        <label className="cv-file-control">Choose a PDF CV
+          <input key={fileInputKey} type="file" accept=".pdf,application/pdf" onChange={event => chooseCv(event.target.files?.[0] || null)} />
+        </label>
+        <button className="button primary" type="submit" disabled={!cvFile || uploadBusy}>
+          <FileText size={15}/>{uploadBusy ? 'Extracting text…' : 'Preview PDF text'}
+        </button>
+        <p className="cv-upload-note">PDF only · 5 MB maximum · 5 pages maximum. The file is processed in server memory and is not saved. Use synthetic test files only.</p>
+        {uploadError && <div className="auth-error" role="alert">{uploadError}</div>}
+      </form>
+      {cvPreview && <div className="cv-preview-result" aria-live="polite">
+        <div className="cv-preview-meta">
+          <strong>{cvPreview.pageCount} page{cvPreview.pageCount === 1 ? '' : 's'} processed</strong>
+          <span>{cvPreview.characterCount.toLocaleString('en-US')} characters · not saved</span>
+        </div>
+        {cvPreview.requiresOcr && <p className="cv-ocr-notice">No selectable text was found. This may be a scanned PDF; OCR is not available yet.</p>}
+        <label className="cv-text-label">Extracted text — review before using
+          <textarea rows="10" value={cvPreview.text} readOnly placeholder="No selectable text was extracted." />
+        </label>
+        <div className="cv-preview-actions"><button className="button secondary" type="button" onClick={clearCv}>Clear preview</button></div>
+        <p className="cv-upload-note">This preview does not create a candidate record or identify skills automatically. Copy only job-relevant skills into the manual comparison below.</p>
+      </div>}
+    </section>}
     <section className="panel full-panel analysis-input-panel">
       <div className="panel-heading">
         <div><h2>Explainable skill coverage</h2><p>Compare a candidate skill list with a role's requirements</p></div>
@@ -119,7 +200,7 @@ function CVAnalysisPanel() {
         <label>Required skills for the role
           <textarea rows="7" value={requiredInput} onChange={event => setRequiredInput(event.target.value)} placeholder={'React\nPostgreSQL\nNode.js'} required />
         </label>
-        <p className="analysis-form-note">Enter one skill per line or separate skills with commas. Only these skill labels are sent to the API; no CV file is uploaded or stored.</p>
+        <p className="analysis-form-note">Enter one skill per line or separate skills with commas. Only the skill labels entered here are sent to the matching API. Extracted CV text is not automatically converted into skills or stored.</p>
         {error && <div className="auth-error analysis-form-message" role="alert">{error}</div>}
         <button className="button primary analysis-submit" disabled={busy}>
           <Sparkles size={15}/>{busy ? 'Calculating…' : 'Calculate skill coverage'}
@@ -332,7 +413,7 @@ function App() {
 
         {active === 'Activity' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Activity log</h2><p>Audit trail of candidate and job changes</p></div><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Refresh</button></div><div className="activity-list">{activities.map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{item.entity_type} · {new Date(item.created_at).toLocaleString()}</small></div><span className="activity-action">{item.action}</span></div>)}{!activities.length && <p className="empty-state">No activity yet. Add a candidate or job to start the log.</p>}</div></section>}
 
-        {active === 'CV analysis' && <CVAnalysisPanel/>}
+        {active === 'CV analysis' && <CVAnalysisPanel canUpload={canManage}/>}
 
         {active === 'Settings' && <section className="panel full-panel feature-panel"><div className="feature-symbol"><Settings size={25}/></div><h2>Workspace settings</h2><p>La configuration de la base de données se fait côté serveur dans <code>server/.env</code>. Ne partage jamais ce fichier ni son mot de passe.</p><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Test database connection</button></section>}
 
