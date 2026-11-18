@@ -105,6 +105,15 @@ test('normalizes extracted text and always destroys the parser', async () => {
   assert.equal(state.destroyed, true);
 });
 
+test('returns fixed-catalog skill suggestions for manual review', async () => {
+  const { Parser } = fakeParser({ text: 'React Native, NodeJS and PostgreSQL; JavaScript.' });
+  const result = await createCvPreview(makeMinimalPdf(), { Parser });
+  assert.deepEqual(result.skillSuggestions.skills, ['React Native', 'Node.js', 'PostgreSQL', 'JavaScript']);
+  assert.equal(result.skillSuggestions.reviewRequired, true);
+  assert.match(result.skillSuggestions.disclaimer, /proficiency and experience are not inferred/);
+});
+
+
 test('marks image-only PDFs as requiring OCR without inventing text', async () => {
   const { Parser } = fakeParser({ text: '   \n  ' });
   const result = await createCvPreview(makeMinimalPdf(), { Parser });
