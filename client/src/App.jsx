@@ -154,7 +154,7 @@ function CVAnalysisPanel({ canUpload }) {
       known.add(key);
       return true;
     });
-    setCandidateInput([...merged, ...additions].join('\\n'));
+    setCandidateInput([...merged, ...additions].join('\n'));
     setSkillSuggestionMessage(additions.length ? additions.length + ' skill(s) added to the candidate list. Review the list before matching.' : 'The selected skills were already in the candidate list.');
     setSelectedSuggestedSkills([]);
   };
