@@ -80,7 +80,9 @@ const SKILL_CATALOG = [
 ];
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+  return Array.from(value, character => {
+    return '\\^$.*+?()[]{}|'.includes(character) ? '\\' + character : character;
+  }).join('');
 }
 
 const SKILL_PATTERNS = SKILL_CATALOG.flatMap(skill =>
