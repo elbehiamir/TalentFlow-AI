@@ -154,7 +154,7 @@ Content-Type: application/json
 
 The percentage is calculated as `matched required skills / unique required skills × 100`, rounded to the nearest integer. Matching is case-insensitive and normalizes Unicode and whitespace, but it does not infer synonyms, skill proficiency, experience or seniority. Extra skills are reported separately and do not raise the percentage. The result is decision support only, not a hiring recommendation.
 
-The preview uploads a PDF only for temporary text extraction; it does not store candidate details or infer skills. Skill extraction from parsed text, candidate persistence and automatic matching from CV content remain unimplemented.
+The preview uploads a PDF only for temporary text extraction; it does not store candidate details. It also suggests skills by matching text against a fixed keyword catalog using case-insensitive Unicode-aware boundaries and explicit aliases. Suggestions are shown for manual selection; overlapping terms prefer the longer phrase (for example, React Native before React), duplicates are removed, and no proficiency, experience, synonym or context inference is performed. The extractor is heuristic and can produce false positives or miss skills. Suggestions are not saved or used in matching until a recruiter manually selects them in the UI.
 
 ## Security and product boundaries
 
