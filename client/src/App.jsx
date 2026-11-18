@@ -81,9 +81,13 @@ function CVAnalysisPanel({ canUpload }) {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [selectedSuggestedSkills, setSelectedSuggestedSkills] = useState([]);
+  const [skillSuggestionMessage, setSkillSuggestionMessage] = useState('');
 
   const chooseCv = file => {
     setCvPreview(null);
+    setSelectedSuggestedSkills([]);
+    setSkillSuggestionMessage('');
     setUploadError('');
     if (!file) {
       setCvFile(null);
@@ -116,6 +120,8 @@ function CVAnalysisPanel({ canUpload }) {
       form.append('file', cvFile);
       const response = await apiRequest('/cv/preview', { method: 'POST', body: form });
       setCvPreview(response.preview);
+      setSelectedSuggestedSkills([]);
+      setSkillSuggestionMessage('');
     } catch (err) {
       setUploadError(err.message || 'Unable to preview this PDF.');
     } finally {
@@ -126,11 +132,32 @@ function CVAnalysisPanel({ canUpload }) {
   const clearCv = () => {
     setCvFile(null);
     setCvPreview(null);
+    setSelectedSuggestedSkills([]);
+    setSkillSuggestionMessage('');
     setUploadError('');
     setFileInputKey(value => value + 1);
   };
 
   const splitSkills = value => value.split(String.fromCharCode(10)).flatMap(line => line.split(',')).map(skill => skill.trim()).filter(Boolean);
+
+  const toggleSuggestedSkill = skill => setSelectedSuggestedSkills(current =>
+    current.includes(skill) ? current.filter(item => item !== skill) : [...current, skill]
+  );
+
+  const addSelectedSkills = () => {
+    const selected = cvPreview?.skillSuggestions?.skills?.filter(skill => selectedSuggestedSkills.includes(skill)) || [];
+    const merged = splitSkills(candidateInput);
+    const known = new Set(merged.map(skill => skill.normalize('NFKC').trim().toLowerCase()));
+    const additions = selected.filter(skill => {
+      const key = skill.normalize('NFKC').trim().toLowerCase();
+      if (known.has(key)) return false;
+      known.add(key);
+      return true;
+    });
+    setCandidateInput([...merged, ...additions].join('\\n'));
+    setSkillSuggestionMessage(additions.length ? additions.length + ' skill(s) added to the candidate list. Review the list before matching.' : 'The selected skills were already in the candidate list.');
+    setSelectedSuggestedSkills([]);
+  };
 
   const analyze = async event => {
     event.preventDefault();
@@ -185,7 +212,19 @@ function CVAnalysisPanel({ canUpload }) {
           <textarea rows="10" value={cvPreview.text} readOnly placeholder="No selectable text was extracted." />
         </label>
         <div className="cv-preview-actions"><button className="button secondary" type="button" onClick={clearCv}>Clear preview</button></div>
-        <p className="cv-upload-note">This preview does not create a candidate record or identify skills automatically. Copy only job-relevant skills into the manual comparison below.</p>
+        {cvPreview.skillSuggestions?.skills?.length > 0 ? <section className="cv-skill-suggestions">
+          <div className="cv-skill-suggestions-heading"><strong>Keyword skill suggestions</strong><span>{cvPreview.skillSuggestions.skills.length} detected · review required</span></div>
+          <p>{cvPreview.skillSuggestions.method}. {cvPreview.skillSuggestions.disclaimer}</p>
+          <div className="cv-suggestion-list">
+            {cvPreview.skillSuggestions.skills.map(skill => <label className="cv-suggestion-item" key={skill}>
+              <input type="checkbox" checked={selectedSuggestedSkills.includes(skill)} onChange={() => toggleSuggestedSkill(skill)}/>
+              <span>{skill}</span>
+            </label>)}
+          </div>
+          <button className="button secondary" type="button" disabled={!selectedSuggestedSkills.length} onClick={addSelectedSkills}>Add selected to candidate skills</button>
+          {skillSuggestionMessage && <small className="cv-suggestion-feedback" role="status">{skillSuggestionMessage}</small>}
+        </section> : <p className="cv-upload-note">No supported skill keywords were found in the extracted text. This does not mean the CV has no skills.</p>}
+        <p className="cv-upload-note">This preview does not create a candidate record. Select and confirm any relevant suggestions above before using them in the manual comparison.</p>
       </div>}
     </section>}
     <section className="panel full-panel analysis-input-panel">
