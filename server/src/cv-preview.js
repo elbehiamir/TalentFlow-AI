@@ -1,4 +1,5 @@
 import { PDFParse } from 'pdf-parse';
+import { extractCvSkills } from './cv-skills.js';
 
 export const MAX_CV_BYTES = 5 * 1024 * 1024;
 export const MAX_CV_PAGES = 5;
@@ -90,6 +91,7 @@ export async function createCvPreview(buffer, {
         characterCount: text.length,
         text,
         requiresOcr: text.length === 0,
+        skillSuggestions: extractCvSkills(text),
         reviewRequired: true,
         persisted: false
       };
