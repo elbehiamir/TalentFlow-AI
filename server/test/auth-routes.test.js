@@ -28,7 +28,7 @@ async function startAuthServer(t, { pool, passwordVerifier }) {
 }
 
 test('the dummy hash is a valid scrypt hash that never authenticates an unknown account', async () => {
-  assert.match(DUMMY_PASSWORD_HASH, /^scrypt\\$16384\\$8\\$1\\$/);
+    assert.match(DUMMY_PASSWORD_HASH, /^scrypt\$16384\$8\$1\$/);
   assert.equal(await verifyPassword('not-the-dummy-password', DUMMY_PASSWORD_HASH), false);
 });
 
