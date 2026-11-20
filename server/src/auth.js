@@ -10,6 +10,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const SESSION_COOKIE_NAME = 'talentflow_session';
 
+// Valid scrypt hash used only to keep unknown-email login attempts on the same verification path.
+export const DUMMY_PASSWORD_HASH = 'scrypt$16384$8$1$j206G5xOcvCl2MGz5vcJKg$cpDTY6x8geZieT9_dngLSgYKr9l9Z2mAu8BG_7DDLzwBNkz6uhWZQrSG6twKVQc2eH1KQGKZdpfG5A6SW-XDZg';
+
 function assertSecret(secret) {
   if (typeof secret !== 'string' || Buffer.byteLength(secret) < 32) {
     throw new Error('JWT_SECRET must contain at least 32 bytes of random data.');
