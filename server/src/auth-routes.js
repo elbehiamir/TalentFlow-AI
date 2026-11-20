@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createAccessToken, normalizeEmail, SESSION_COOKIE_NAME, verifyPassword } from './auth.js';
+import { createAccessToken, DUMMY_PASSWORD_HASH, normalizeEmail, SESSION_COOKIE_NAME, verifyPassword } from './auth.js';
 import { createLoginRateLimiter } from './login-rate-limit.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,7 +15,7 @@ function cookieOptions() {
   };
 }
 
-export function createAuthRouter({ pool, secret, authenticate }) {
+export function createAuthRouter({ pool, secret, authenticate, passwordVerifier = verifyPassword, dummyPasswordHash = DUMMY_PASSWORD_HASH }) {
   const router = Router();
   const loginRateLimiter = createLoginRateLimiter();
 
@@ -33,8 +33,8 @@ export function createAuthRouter({ pool, secret, authenticate }) {
         [email]
       );
       const account = result.rows[0];
-      const valid = account ? await verifyPassword(password, account.password_hash) : false;
-      if (!valid) {
+      const valid = await passwordVerifier(password, account?.password_hash ?? dummyPasswordHash);
+      if (!account || !valid) {
         loginRateLimiter.recordFailure(req);
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
