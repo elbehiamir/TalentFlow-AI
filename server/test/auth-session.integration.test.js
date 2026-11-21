@@ -82,7 +82,7 @@ test('login, session lookup and logout use the expected browser cookie lifecycle
   assert.equal(logoutResponse.status, 204);
   const clearedCookie = logoutResponse.headers.get('set-cookie') ?? '';
   assert.match(clearedCookie, /^talentflow_session=;/);
-  assert.match(clearedCookie, /Max-Age=0/i);
+  assert.match(clearedCookie, /Expires=Thu, 01 Jan 1970 00:00:00 GMT/i);
   assert.match(clearedCookie, /HttpOnly/i);
   assert.match(clearedCookie, /Path=\/api/i);
   assert.match(clearedCookie, /SameSite=Lax/i);
