@@ -1,12 +1,13 @@
-import { createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scryptAsync = promisify(scrypt);
 const KEY_LENGTH = 64;
 const SCRYPT_OPTIONS = Object.freeze({ N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
-const TOKEN_TTL_SECONDS = 8 * 60 * 60;
+export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ALLOWED_ROLES = new Set(['admin', 'recruiter', 'hiring_manager']);
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const SESSION_COOKIE_NAME = 'talentflow_session';
 
@@ -54,11 +55,14 @@ export async function verifyPassword(password, storedHash) {
   }
 }
 
-export function createAccessToken(user, secret, now = Date.now()) {
+export function createAccessToken(user, secret, now = Date.now(), sessionId = randomUUID()) {
   assertSecret(secret);
   const id = Number(user?.id);
   if (!Number.isSafeInteger(id) || id < 1 || !ALLOWED_ROLES.has(user?.role)) {
     throw new Error('Cannot create a session for an invalid user.');
+  }
+  if (typeof sessionId !== 'string' || !SESSION_ID_PATTERN.test(sessionId)) {
+    throw new Error('Cannot create a session with an invalid session id.');
   }
 
   const issuedAt = Math.floor(now / 1000);
@@ -67,8 +71,9 @@ export function createAccessToken(user, secret, now = Date.now()) {
     sub: String(id),
     email: normalizeEmail(user.email),
     role: user.role,
+    jti: sessionId,
     iat: issuedAt,
-    exp: issuedAt + TOKEN_TTL_SECONDS
+    exp: issuedAt + SESSION_TTL_SECONDS
   })).toString('base64url');
   const signingInput = header + '.' + payload;
   const signature = createHmac('sha256', secret).update(signingInput).digest('base64url');
@@ -104,11 +109,12 @@ export function verifyAccessToken(token, secret, now = Date.now()) {
   if (!Number.isSafeInteger(id) || id < 1 ||
       typeof payload.email !== 'string' || !EMAIL_PATTERN.test(payload.email) ||
       !ALLOWED_ROLES.has(payload.role) ||
+      typeof payload.jti !== 'string' || !SESSION_ID_PATTERN.test(payload.jti) ||
       !Number.isInteger(payload.iat) || !Number.isInteger(payload.exp) ||
       payload.iat > nowSeconds + 60 || payload.exp <= nowSeconds ||
-      payload.exp - payload.iat > TOKEN_TTL_SECONDS) return null;
+      payload.exp - payload.iat > SESSION_TTL_SECONDS) return null;
 
-  return { id, email: payload.email, role: payload.role };
+  return { id, email: payload.email, role: payload.role, sessionId: payload.jti };
 }
 
 function readSessionCookie(req) {
@@ -119,13 +125,40 @@ function readSessionCookie(req) {
   return entry ? entry.slice(prefix.length) : '';
 }
 
-export function createAuthMiddleware(secret) {
+export function createAuthMiddleware(secret, pool) {
   assertSecret(secret);
-  return (req, res, next) => {
-    const user = verifyAccessToken(readSessionCookie(req), secret);
-    if (!user) return res.status(401).json({ error: 'Authentication required. Please sign in.' });
-    req.user = user;
-    next();
+  if (!pool || typeof pool.query !== 'function') {
+    throw new Error('A PostgreSQL pool is required for revocable session authentication.');
+  }
+
+  return async (req, res, next) => {
+    const claims = verifyAccessToken(readSessionCookie(req), secret);
+    if (!claims) return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+
+    try {
+      const result = await pool.query(
+        `SELECT u.id, u.email, u.role
+         FROM auth_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1
+           AND s.user_id = $2
+           AND s.revoked_at IS NULL
+           AND s.expires_at > NOW()`,
+        [claims.sessionId, claims.id]
+      );
+      const account = result.rows?.[0];
+      const id = Number(account?.id);
+      if (!account || !Number.isSafeInteger(id) || id < 1 ||
+          !EMAIL_PATTERN.test(account.email) || !ALLOWED_ROLES.has(account.role)) {
+        return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+      }
+
+      req.user = { id, email: normalizeEmail(account.email), role: account.role };
+      req.sessionId = claims.sessionId;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
   };
 }
 
