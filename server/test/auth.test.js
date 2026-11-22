@@ -18,7 +18,7 @@ test('password hashes verify without storing the original password', async () =>
   const password = 'A-long-test-password-2026';
   const hash = await hashPassword(password);
   assert.notEqual(hash, password);
-  assert.match(hash, /^scrypt\\$/);
+  assert.match(hash, /^scrypt\$/);
   assert.equal(await verifyPassword(password, hash), true);
   assert.equal(await verifyPassword('a-different-password', hash), false);
 });
