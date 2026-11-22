@@ -10,7 +10,7 @@ import {
 } from './auth.js';
 import { createLoginRateLimiter } from './login-rate-limit.js';
 
-const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
 
 function cookieOptions() {
@@ -60,7 +60,7 @@ export function createAuthRouter({ pool, secret, authenticate, passwordVerifier 
       const sessionId = randomUUID();
       const token = createAccessToken(account, secret, now, sessionId);
       await pool.query(
-        'INSERT INTO auth_sessions (id, user_id, expires_at) VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 second'))',
+        `INSERT INTO auth_sessions (id, user_id, expires_at) VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 second'))`,
         [sessionId, account.id, SESSION_TTL_SECONDS]
       );
 
