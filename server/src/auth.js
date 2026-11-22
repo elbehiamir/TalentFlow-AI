@@ -6,7 +6,7 @@ const KEY_LENGTH = 64;
 const SCRYPT_OPTIONS = Object.freeze({ N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ALLOWED_ROLES = new Set(['admin', 'recruiter', 'hiring_manager']);
-const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const SESSION_COOKIE_NAME = 'talentflow_session';
