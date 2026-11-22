@@ -83,14 +83,14 @@ Open `http://localhost:5173`.
 
 ## Authentication setup
 
-The API now requires an authenticated workspace session for recruitment data. Before starting the server:
+The API requires an authenticated workspace session for recruitment data. Before starting the server:
 
 1. Generate a private signing secret with `openssl rand -hex 32` and place the output in `JWT_SECRET` in `server/.env`.
 2. Set both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` for the first startup. The initial password must contain at least 12 characters.
 3. Start the API. It creates the first administrator only if that email is not already registered. It never resets an existing account's password.
 4. Remove `BOOTSTRAP_ADMIN_PASSWORD` from the runtime environment after the administrator has been created.
 
-There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in uses an eight-hour, HttpOnly, SameSite=Lax session cookie; production mode also marks it Secure. Failed sign-in attempts are limited to 10 per client IP in a 15-minute window, with a `Retry-After` response when blocked. Unknown-email attempts also run scrypt verification with a fixed dummy hash to reduce account-enumeration timing differences. This limiter is in-memory and applies per API process; production deployments with multiple instances should replace it with a shared store such as Redis. When running behind a reverse proxy, configure Express `trust proxy` only for the known proxy hops so `req.ip` identifies the client safely; never trust arbitrary forwarded headers. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
+There is no public registration endpoint. An administrator can create recruiter or hiring-manager accounts with the protected `POST /api/users` endpoint. User passwords are stored as salted scrypt hashes. Sign-in creates an eight-hour, HttpOnly, SameSite=Lax cookie (Secure in production) and a corresponding row in PostgreSQL `auth_sessions`. Every protected request checks that the session row still exists, is not revoked and has not expired; the current role is loaded from the database. Logging out revokes only the current session in PostgreSQL before clearing the browser cookie, so a copied token stops working immediately. Deleting a user also deletes that user's sessions through the foreign key. Existing cookies issued before database-backed sessions are introduced must sign in again. Failed sign-in attempts are limited to 10 per client IP in a 15-minute window, with a `Retry-After` response when blocked. This limiter is in-memory and applies per API process; production deployments with multiple instances should replace it with a shared store such as Redis. When running behind a reverse proxy, configure Express `trust proxy` only for the known proxy hops so `req.ip` identifies the client safely; never trust arbitrary forwarded headers. The frontend and API should be deployed on the same site, and `CLIENT_URL` must match the frontend origin exactly.
 
 For browser-session requests, every state-changing method (`POST`, `PUT`, `PATCH`, `DELETE`) must include an `Origin` header that exactly matches `CLIENT_URL`. Missing or mismatched origins are rejected with HTTP 403. Keep the frontend and API origin configuration aligned. Do not disable this check to accommodate a future mobile or server-to-server client; add a separately designed authentication mechanism for those clients.
 
@@ -113,7 +113,7 @@ npm test
 - `GET /api/health` (public health check)
 - `POST /api/auth/login`
 - `GET /api/auth/me`
-- `POST /api/auth/logout`
+- `POST /api/auth/logout` (requires a valid session and revokes it)
 - `POST /api/users` (administrator only; creates recruiter or hiring-manager accounts)
 - `GET /api/dashboard` (authenticated)
 - `GET /api/candidates?search=&stage=`
@@ -128,7 +128,7 @@ npm test
 - `POST /api/matching/preview`
 - `POST /api/cv/preview` (admin/recruiter only; multipart field `file`)
 
-All routes except the health check, login and logout require the session cookie. Role restrictions are enforced by the API, not only by the interface.
+All routes except the health check and login require a valid session cookie. Role restrictions are enforced by the API, not only by the interface.
 
 ## Temporary CV PDF preview
 
@@ -158,6 +158,6 @@ The preview uploads a PDF only for temporary text extraction; it does not store 
 
 ## Security and product boundaries
 
-This is an early development foundation, not yet ready for real candidate personal data or production use. Authentication, HttpOnly session cookies, password hashing, API role checks, strict Origin checks for state-changing browser requests and an in-memory failed-login limiter are implemented. Private persistent CV storage, malware scanning, isolated PDF parsing, consent and retention workflows, full authentication/recruitment API and PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The temporary CV preview is memory-only and is not a production document-management feature. The current Node test suite covers password/session primitives, the HTTP login/session/logout cookie lifecycle with a stubbed user repository, request-origin validation, login throttling, input validation, deterministic skill matching and focused CV upload route HTTP behavior with a stub preview service. It does not yet exercise the full authentication/recruitment API or PostgreSQL. Use test records only until the remaining protections are in place.
+This is an early development foundation, not yet ready for real candidate personal data or production use. Password hashing, database-backed revocable sessions, HttpOnly cookies, API role checks, strict Origin checks for state-changing browser requests and an in-memory failed-login limiter are implemented. Private persistent CV storage, malware scanning, isolated PDF parsing, consent and retention workflows, full authentication/recruitment API and PostgreSQL integration tests, a distributed rate-limit store and production deployment review remain outstanding. The temporary CV preview is memory-only and is not a production document-management feature. The current Node test suite covers password/session primitives, the HTTP login/session/logout lifecycle with an in-memory session repository, request-origin validation, login throttling, input validation, deterministic skill matching and focused CV upload route HTTP behavior with a stub preview service. It does not yet exercise PostgreSQL itself or the full authentication/recruitment API. Use test records only until the remaining protections are in place.
 
 TalentFlow AI is decision-support software. A fit score is not a hiring decision; recruiters must review job-related evidence and make decisions themselves.

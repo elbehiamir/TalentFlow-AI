@@ -30,7 +30,7 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
-const authenticate = createAuthMiddleware(jwtSecret);
+const authenticate = createAuthMiddleware(jwtSecret, pool);
 app.use('/api/auth', createAuthRouter({ pool, secret: jwtSecret, authenticate }));
 app.use('/api', authenticate, apiRoutes);
 

@@ -32,6 +32,14 @@ export async function initializeDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id UUID PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS candidates (
       id BIGSERIAL PRIMARY KEY,
       name VARCHAR(160) NOT NULL,
@@ -58,6 +66,8 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS candidates_job_idx ON candidates(job_id);
     CREATE INDEX IF NOT EXISTS candidates_created_idx ON candidates(created_at DESC);
     CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);
+    CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
   `);
 }
 
