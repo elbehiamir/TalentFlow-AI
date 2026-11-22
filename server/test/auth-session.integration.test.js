@@ -98,7 +98,7 @@ test('login, session lookup and logout revoke only the current server-side sessi
   assert.match(firstSetCookie, /^talentflow_session=/);
   assert.match(firstSetCookie, /HttpOnly/i);
   assert.match(firstSetCookie, /SameSite=Lax/i);
-  assert.match(firstSetCookie, /Path=\\/api/i);
+  assert.match(firstSetCookie, /Path=\/api/i);
   assert.match(firstSetCookie, /Max-Age=28800/i);
   const firstCookie = firstSetCookie.split(';', 1)[0];
 
@@ -124,7 +124,7 @@ test('login, session lookup and logout revoke only the current server-side sessi
   assert.match(clearedCookie, /^talentflow_session=;/);
   assert.match(clearedCookie, /Expires=Thu, 01 Jan 1970 00:00:00 GMT/i);
   assert.match(clearedCookie, /HttpOnly/i);
-  assert.match(clearedCookie, /Path=\\/api/i);
+  assert.match(clearedCookie, /Path=\/api/i);
   assert.match(clearedCookie, /SameSite=Lax/i);
 
   const revokedSessionResponse = await fetch(`${baseUrl}/me`, {
