@@ -74,31 +74,34 @@ test('PostgreSQL persists, reloads, revokes and expires authentication sessions'
     },
     body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD })
   });
-  const cookieFrom = response => {
+  const sessionFrom = response => {
     const value = response.headers.get('set-cookie') ?? '';
     const match = value.match(/^talentflow_session=([^;]+)/);
     assert.ok(match, 'login should issue a session cookie');
-    return 'talentflow_session=' + match[1];
+    const token = match[1];
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    return { cookie: 'talentflow_session=' + token, id: claims.jti };
   };
 
   const firstLogin = await login();
   assert.equal(firstLogin.status, 200);
-  const firstCookie = cookieFrom(firstLogin);
+  const firstSession = sessionFrom(firstLogin);
 
   const secondLogin = await login();
   assert.equal(secondLogin.status, 200);
-  const secondCookie = cookieFrom(secondLogin);
-  assert.notEqual(firstCookie, secondCookie);
+  const secondSession = sessionFrom(secondLogin);
+  assert.notEqual(firstSession.cookie, secondSession.cookie);
+  assert.notEqual(firstSession.id, secondSession.id);
 
   const storedSessions = await appPool.query(
-    'SELECT id, user_id, expires_at, revoked_at FROM auth_sessions ORDER BY created_at'
+    'SELECT id, user_id, expires_at, revoked_at FROM auth_sessions'
   );
   assert.equal(storedSessions.rowCount, 2);
   assert.ok(storedSessions.rows.every(row => row.user_id === storedSessions.rows[0].user_id));
   assert.ok(storedSessions.rows.every(row => row.revoked_at === null));
 
   const beforeRoleChange = await fetch(baseUrl + '/me', {
-    headers: { Cookie: firstCookie }
+    headers: { Cookie: firstSession.cookie }
   });
   assert.equal(beforeRoleChange.status, 200);
   assert.equal((await beforeRoleChange.json()).user.role, 'admin');
@@ -106,7 +109,7 @@ test('PostgreSQL persists, reloads, revokes and expires authentication sessions'
   // Authorization uses the current database role, not the role embedded in the cookie.
   await appPool.query('UPDATE users SET role = $1 WHERE email = $2', ['recruiter', ADMIN_EMAIL]);
   const afterRoleChange = await fetch(baseUrl + '/me', {
-    headers: { Cookie: firstCookie }
+    headers: { Cookie: firstSession.cookie }
   });
   assert.equal(afterRoleChange.status, 200);
   assert.equal((await afterRoleChange.json()).user.role, 'recruiter');
@@ -114,7 +117,7 @@ test('PostgreSQL persists, reloads, revokes and expires authentication sessions'
   const logout = await fetch(baseUrl + '/logout', {
     method: 'POST',
     headers: {
-      Cookie: firstCookie,
+      Cookie: firstSession.cookie,
       Origin: 'http://localhost:5173'
     }
   });
@@ -122,26 +125,26 @@ test('PostgreSQL persists, reloads, revokes and expires authentication sessions'
 
   const revoked = await appPool.query(
     'SELECT revoked_at FROM auth_sessions WHERE id = $1',
-    [storedSessions.rows[0].id]
+    [firstSession.id]
   );
   assert.ok(revoked.rows[0].revoked_at);
 
   const afterLogout = await fetch(baseUrl + '/me', {
-    headers: { Cookie: firstCookie }
+    headers: { Cookie: firstSession.cookie }
   });
   assert.equal(afterLogout.status, 401);
 
   const independentSession = await fetch(baseUrl + '/me', {
-    headers: { Cookie: secondCookie }
+    headers: { Cookie: secondSession.cookie }
   });
   assert.equal(independentSession.status, 200);
 
   await appPool.query(
     'UPDATE auth_sessions SET expires_at = NOW() - INTERVAL \'1 second\' WHERE id = $1',
-    [storedSessions.rows[1].id]
+    [secondSession.id]
   );
   const afterExpiry = await fetch(baseUrl + '/me', {
-    headers: { Cookie: secondCookie }
+    headers: { Cookie: secondSession.cookie }
   });
   assert.equal(afterExpiry.status, 401);
 });
