@@ -11,8 +11,8 @@ export const pool = new Pool({
   ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined
 });
 
-export async function initializeDatabase() {
-  await pool.query(`
+export async function initializeDatabase(databasePool = pool) {
+  await databasePool.query(`
     CREATE TABLE IF NOT EXISTS jobs (
       id BIGSERIAL PRIMARY KEY,
       title VARCHAR(160) NOT NULL,
