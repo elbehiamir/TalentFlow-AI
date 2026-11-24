@@ -9,7 +9,7 @@ export async function cleanupAuthSessions(databasePool) {
     DELETE FROM auth_sessions
     WHERE expires_at <= NOW()
        OR revoked_at <= NOW() - INTERVAL '7 days'
-  `);
+  `, []);
 
   return Number.isInteger(result.rowCount) ? result.rowCount : 0;
 }
