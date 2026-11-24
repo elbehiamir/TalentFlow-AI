@@ -7,6 +7,7 @@ import apiRoutes from './routes.js';
 import { createAuthMiddleware, bootstrapAdmin } from './auth.js';
 import { createAuthRouter } from './auth-routes.js';
 import { createOriginGuard } from './origin-guard.js';
+import { cleanupAuthSessions, scheduleAuthSessionCleanup } from './session-cleanup.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -47,6 +48,17 @@ async function start() {
     if (!process.env.BOOTSTRAP_ADMIN_EMAIL && !process.env.BOOTSTRAP_ADMIN_PASSWORD) {
       console.warn('No bootstrap administrator configured. Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD for the first startup.');
     }
+
+    try {
+      const removedSessions = await cleanupAuthSessions(pool);
+      if (removedSessions > 0) {
+        console.info(`Removed ${removedSessions} expired or old revoked authentication sessions during startup.`);
+      }
+    } catch (error) {
+      console.error('Initial authentication session cleanup failed:', error);
+    }
+    scheduleAuthSessionCleanup(pool);
+
     app.listen(port, () => console.log(`TalentFlow AI API listening on http://localhost:${port}`));
   } catch (error) {
     console.error('TalentFlow AI startup failed:', error.message);
