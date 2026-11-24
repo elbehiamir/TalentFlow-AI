@@ -7,6 +7,7 @@ import pg from 'pg';
 import { createAuthMiddleware, bootstrapAdmin } from '../src/auth.js';
 import { createAuthRouter } from '../src/auth-routes.js';
 import { createOriginGuard } from '../src/origin-guard.js';
+import { cleanupAuthSessions } from '../src/session-cleanup.js';
 
 const { Pool } = pg;
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -14,7 +15,7 @@ const SECRET = 'integration-test-secret-with-at-least-32-bytes';
 const ADMIN_EMAIL = 'admin@talentflow.test';
 const ADMIN_PASSWORD = 'Integration-admin-password-2026';
 
-test('PostgreSQL persists, reloads, revokes and expires authentication sessions', {
+test('PostgreSQL persists, reloads, revokes, expires and cleans authentication sessions', {
   skip: !databaseUrl ? 'Set TEST_DATABASE_URL to a disposable PostgreSQL database.' : false
 }, async t => {
   const adminPool = new Pool({ connectionString: databaseUrl });
@@ -139,12 +140,37 @@ test('PostgreSQL persists, reloads, revokes and expires authentication sessions'
   });
   assert.equal(independentSession.status, 200);
 
+  const thirdLogin = await login();
+  assert.equal(thirdLogin.status, 200);
+  const thirdSession = sessionFrom(thirdLogin);
+  const thirdLogout = await fetch(baseUrl + '/logout', {
+    method: 'POST',
+    headers: {
+      Cookie: thirdSession.cookie,
+      Origin: 'http://localhost:5173'
+    }
+  });
+  assert.equal(thirdLogout.status, 204);
+
+  await appPool.query(
+    'UPDATE auth_sessions SET revoked_at = NOW() - INTERVAL \'8 days\' WHERE id = $1',
+    [firstSession.id]
+  );
   await appPool.query(
     'UPDATE auth_sessions SET expires_at = NOW() - INTERVAL \'1 second\' WHERE id = $1',
     [secondSession.id]
   );
+
   const afterExpiry = await fetch(baseUrl + '/me', {
     headers: { Cookie: secondSession.cookie }
   });
   assert.equal(afterExpiry.status, 401);
+
+  assert.equal(await cleanupAuthSessions(appPool), 2);
+  const remainingSessions = await appPool.query(
+    'SELECT id, revoked_at FROM auth_sessions ORDER BY created_at'
+  );
+  assert.equal(remainingSessions.rowCount, 1);
+  assert.equal(remainingSessions.rows[0].id, thirdSession.id);
+  assert.ok(remainingSessions.rows[0].revoked_at, 'recently revoked sessions should be retained for seven days');
 });
