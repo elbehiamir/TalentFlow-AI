@@ -68,6 +68,9 @@ export async function initializeDatabase(databasePool = pool) {
     CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status);
     CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS auth_sessions_revoked_idx
+      ON auth_sessions(revoked_at)
+      WHERE revoked_at IS NOT NULL;
   `);
 }
 
