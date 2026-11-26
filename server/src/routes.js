@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { pool, logActivity } from './db.js';
+import { pool, logActivity, withTransaction } from './db.js';
 import { CANDIDATE_STAGES, cleanString, parseCandidateInput, parseJobInput, parsePositiveId } from './validation.js';
 import { calculateSkillMatch } from './matching.js';
 import { hashPassword, requireRoles } from './auth.js';
@@ -95,13 +95,16 @@ router.post('/candidates', requireRoles(...editorRoles), async (req, res, next) 
     const parsed = parseCandidateInput(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const { name, email, role, stage, score, job_id: jobId } = parsed.value;
-    const result = await pool.query(
-      `INSERT INTO candidates (name, email, role, stage, score, job_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
-      [name, email, role, stage, score, jobId]
-    );
-    await logActivity('created', 'candidate', result.rows[0].id, `Candidate added: ${name}`);
+    const result = await withTransaction(async client => {
+      const inserted = await client.query(
+        `INSERT INTO candidates (name, email, role, stage, score, job_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
+        [name, email, role, stage, score, jobId]
+      );
+      await logActivity('created', 'candidate', inserted.rows[0].id, `Candidate added: ${name}`, req.user.id, client);
+      return inserted;
+    });
     res.status(201).json({ candidate: result.rows[0] });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'A candidate with this email already exists.' });
@@ -114,19 +117,26 @@ router.patch('/candidates/:id', requireRoles(...editorRoles), async (req, res, n
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid candidate id.' });
-    const current = await pool.query('SELECT * FROM candidates WHERE id = $1', [id]);
-    if (!current.rowCount) return res.status(404).json({ error: 'Candidate not found.' });
 
-    const parsed = parseCandidateInput(req.body, current.rows[0]);
-    if (parsed.error) return res.status(400).json({ error: parsed.error });
-    const { name, email, role, stage, score, job_id: jobId } = parsed.value;
-    const result = await pool.query(
-      `UPDATE candidates SET name=$1, email=$2, role=$3, stage=$4, score=$5, job_id=$6, updated_at=NOW()
-       WHERE id=$7 RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
-      [name, email, role, stage, score, jobId, id]
-    );
-    await logActivity('updated', 'candidate', id, `Candidate updated: ${name}`);
-    res.json({ candidate: result.rows[0] });
+    const outcome = await withTransaction(async client => {
+      const current = await client.query('SELECT * FROM candidates WHERE id = $1 FOR UPDATE', [id]);
+      if (!current.rowCount) return { notFound: true };
+
+      const parsed = parseCandidateInput(req.body, current.rows[0]);
+      if (parsed.error) return { error: parsed.error };
+      const { name, email, role, stage, score, job_id: jobId } = parsed.value;
+      const result = await client.query(
+        `UPDATE candidates SET name=$1, email=$2, role=$3, stage=$4, score=$5, job_id=$6, updated_at=NOW()
+         WHERE id=$7 RETURNING id, name, email, role, stage, score, job_id, created_at, updated_at`,
+        [name, email, role, stage, score, jobId, id]
+      );
+      await logActivity('updated', 'candidate', id, `Candidate updated: ${name}`, req.user.id, client);
+      return { candidate: result.rows[0] };
+    });
+
+    if (outcome.notFound) return res.status(404).json({ error: 'Candidate not found.' });
+    if (outcome.error) return res.status(400).json({ error: outcome.error });
+    res.json({ candidate: outcome.candidate });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'A candidate with this email already exists.' });
     if (error.code === '23503') return res.status(400).json({ error: 'Selected job does not exist.' });
@@ -138,9 +148,13 @@ router.delete('/candidates/:id', requireRoles('admin'), async (req, res, next) =
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid candidate id.' });
-    const result = await pool.query('DELETE FROM candidates WHERE id=$1 RETURNING id, name', [id]);
-    if (!result.rowCount) return res.status(404).json({ error: 'Candidate not found.' });
-    await logActivity('deleted', 'candidate', id, `Candidate deleted: ${result.rows[0].name}`);
+    const deleted = await withTransaction(async client => {
+      const result = await client.query('DELETE FROM candidates WHERE id=$1 RETURNING id, name', [id]);
+      if (!result.rowCount) return null;
+      await logActivity('deleted', 'candidate', id, `Candidate deleted: ${result.rows[0].name}`, req.user.id, client);
+      return result.rows[0];
+    });
+    if (!deleted) return res.status(404).json({ error: 'Candidate not found.' });
     res.json({ message: 'Candidate deleted.' });
   } catch (error) { next(error); }
 });
@@ -163,11 +177,14 @@ router.post('/jobs', requireRoles(...editorRoles), async (req, res, next) => {
     const parsed = parseJobInput(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const { title, team, location } = parsed.value;
-    const result = await pool.query(
-      'INSERT INTO jobs (title, team, location) VALUES ($1,$2,$3) RETURNING *',
-      [title, team, location]
-    );
-    await logActivity('created', 'job', result.rows[0].id, `Job opening created: ${title}`);
+    const result = await withTransaction(async client => {
+      const inserted = await client.query(
+        'INSERT INTO jobs (title, team, location) VALUES ($1,$2,$3) RETURNING *',
+        [title, team, location]
+      );
+      await logActivity('created', 'job', inserted.rows[0].id, `Job opening created: ${title}`, req.user.id, client);
+      return inserted;
+    });
     res.status(201).json({ job: { ...result.rows[0], applicant_count: 0 } });
   } catch (error) { next(error); }
 });
@@ -176,18 +193,25 @@ router.patch('/jobs/:id', requireRoles(...editorRoles), async (req, res, next) =
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid job id.' });
-    const current = await pool.query('SELECT * FROM jobs WHERE id=$1', [id]);
-    if (!current.rowCount) return res.status(404).json({ error: 'Job not found.' });
 
-    const parsed = parseJobInput(req.body, current.rows[0]);
-    if (parsed.error) return res.status(400).json({ error: parsed.error });
-    const { title, team, location, status } = parsed.value;
-    const result = await pool.query(
-      'UPDATE jobs SET title=$1, team=$2, location=$3, status=$4, updated_at=NOW() WHERE id=$5 RETURNING *',
-      [title, team, location, status, id]
-    );
-    await logActivity('updated', 'job', id, `Job opening updated: ${title}`);
-    res.json({ job: result.rows[0] });
+    const outcome = await withTransaction(async client => {
+      const current = await client.query('SELECT * FROM jobs WHERE id=$1 FOR UPDATE', [id]);
+      if (!current.rowCount) return { notFound: true };
+
+      const parsed = parseJobInput(req.body, current.rows[0]);
+      if (parsed.error) return { error: parsed.error };
+      const { title, team, location, status } = parsed.value;
+      const result = await client.query(
+        'UPDATE jobs SET title=$1, team=$2, location=$3, status=$4, updated_at=NOW() WHERE id=$5 RETURNING *',
+        [title, team, location, status, id]
+      );
+      await logActivity('updated', 'job', id, `Job opening updated: ${title}`, req.user.id, client);
+      return { job: result.rows[0] };
+    });
+
+    if (outcome.notFound) return res.status(404).json({ error: 'Job not found.' });
+    if (outcome.error) return res.status(400).json({ error: outcome.error });
+    res.json({ job: outcome.job });
   } catch (error) { next(error); }
 });
 
@@ -195,16 +219,26 @@ router.delete('/jobs/:id', requireRoles('admin'), async (req, res, next) => {
   try {
     const id = parsePositiveId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid job id.' });
-    const result = await pool.query('DELETE FROM jobs WHERE id=$1 RETURNING id, title', [id]);
-    if (!result.rowCount) return res.status(404).json({ error: 'Job not found.' });
-    await logActivity('deleted', 'job', id, `Job opening deleted: ${result.rows[0].title}`);
+    const deleted = await withTransaction(async client => {
+      const result = await client.query('DELETE FROM jobs WHERE id=$1 RETURNING id, title', [id]);
+      if (!result.rowCount) return null;
+      await logActivity('deleted', 'job', id, `Job opening deleted: ${result.rows[0].title}`, req.user.id, client);
+      return result.rows[0];
+    });
+    if (!deleted) return res.status(404).json({ error: 'Job not found.' });
     res.json({ message: 'Job deleted.' });
   } catch (error) { next(error); }
 });
 
 router.get('/activity', requireRoles('admin', 'recruiter'), async (_req, res, next) => {
   try {
-    const result = await pool.query('SELECT id, action, entity_type, entity_id, description, created_at FROM activity_logs ORDER BY created_at DESC LIMIT 100');
+    const result = await pool.query(
+      `SELECT a.id, a.action, a.entity_type, a.entity_id, a.description,
+              a.user_id, u.email AS actor_email, a.created_at
+       FROM activity_logs a
+       LEFT JOIN users u ON u.id = a.user_id
+       ORDER BY a.created_at DESC LIMIT 100`
+    );
     res.json({ activities: result.rows });
   } catch (error) { next(error); }
 });
