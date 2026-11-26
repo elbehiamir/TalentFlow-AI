@@ -59,8 +59,12 @@ export async function initializeDatabase(databasePool = pool) {
       entity_type VARCHAR(40) NOT NULL,
       entity_id BIGINT,
       description TEXT NOT NULL,
+      user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE activity_logs
+      ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
 
     CREATE INDEX IF NOT EXISTS candidates_stage_idx ON candidates(stage);
     CREATE INDEX IF NOT EXISTS candidates_job_idx ON candidates(job_id);
@@ -71,12 +75,43 @@ export async function initializeDatabase(databasePool = pool) {
     CREATE INDEX IF NOT EXISTS auth_sessions_revoked_idx
       ON auth_sessions(revoked_at)
       WHERE revoked_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS activity_logs_user_created_idx
+      ON activity_logs(user_id, created_at DESC);
   `);
 }
 
-export async function logActivity(action, entityType, entityId, description) {
-  await pool.query(
-    'INSERT INTO activity_logs (action, entity_type, entity_id, description) VALUES ($1, $2, $3, $4)',
-    [action, entityType, entityId ?? null, description]
+export async function withTransaction(callback, databasePool = pool) {
+  if (typeof callback !== 'function') {
+    throw new TypeError('A transaction callback is required.');
+  }
+
+  const client = await databasePool.connect();
+  let transactionStarted = false;
+
+  try {
+    await client.query('BEGIN');
+    transactionStarted = true;
+    const result = await callback(client);
+    await client.query('COMMIT');
+    transactionStarted = false;
+    return result;
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original operation error; the connection is released below.
+      }
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function logActivity(action, entityType, entityId, description, userId = null, executor = pool) {
+  await executor.query(
+    'INSERT INTO activity_logs (action, entity_type, entity_id, description, user_id) VALUES ($1, $2, $3, $4, $5)',
+    [action, entityType, entityId ?? null, description, userId ?? null]
   );
 }
