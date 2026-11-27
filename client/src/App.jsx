@@ -325,8 +325,9 @@ function App() {
 
   useEffect(() => { if (user) loadData(); }, [loadData, user]);
 
+  const userRole = user?.role;
   const loadActivity = useCallback(async () => {
-    if (!user || user.role === 'hiring_manager') {
+    if (!userRole || userRole === 'hiring_manager') {
       setActivityResults([]);
       return;
     }
@@ -346,7 +347,7 @@ function App() {
     } finally {
       setActivityLoading(false);
     }
-  }, [user?.role, activityFilters]);
+  }, [userRole, activityFilters]);
 
   useEffect(() => {
     if (user && active === 'Activity') loadActivity();
