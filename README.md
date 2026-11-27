@@ -15,7 +15,7 @@ An AI-assisted applicant tracking platform for recruitment teams. Recruiters rem
 - Create, edit and delete candidate records
 - Create and pause/reactivate job openings
 - Dashboard metrics and pipeline counts calculated from database records
-- Activity log for candidate and job changes
+- Activity log for candidate/job changes, workspace-user provisioning and successful sign-in/sign-out events
 - CSV export of the currently filtered candidate list
 - API validation for candidate and job fields, allowed stages/statuses, fit-score bounds and record IDs
 - Explainable skill-coverage preview using exact normalized skill names; no hidden AI score or automatic hiring decision
@@ -95,9 +95,11 @@ There is no public registration endpoint. An administrator can create recruiter 
 For browser-session requests, every state-changing method (`POST`, `PUT`, `PATCH`, `DELETE`) must include an `Origin` header that exactly matches `CLIENT_URL`. Missing or mismatched origins are rejected with HTTP 403. Keep the frontend and API origin configuration aligned. Do not disable this check to accommodate a future mobile or server-to-server client; add a separately designed authentication mechanism for those clients.
 
 Roles:
-- **admin**: full access, including user provisioning and deleting records.
-- **recruiter**: can view, create and update candidates and jobs, and read the activity log.
+- **admin**: full access, including user provisioning and deleting records; can review workspace-user and authentication audit events.
+- **recruiter**: can view, create and update candidates and jobs, and read candidate/job activity only.
 - **hiring_manager**: read-only access to recruitment records and dashboard data; the activity log is hidden.
+
+Successful sign-ins, sign-outs and workspace-user provisioning are recorded in the same PostgreSQL transaction as the session or user change. Authentication and user-provisioning events are administrator-only. Activity filters accept an actor ID, event type, action and inclusive UTC date range; filter values are validated and SQL remains parameterized.
 
 ## Run backend tests
 
@@ -124,7 +126,7 @@ npm test
 - `POST /api/jobs`
 - `PATCH /api/jobs/:id`
 - `DELETE /api/jobs/:id` (administrator only)
-- `GET /api/activity`
+- `GET /api/activity?actorId=&entityType=&action=&from=&to=` (validated filters; administrators can review security events, recruiters see candidate/job activity only)
 - `POST /api/matching/preview`
 - `POST /api/cv/preview` (admin/recruiter only; multipart field `file`)
 

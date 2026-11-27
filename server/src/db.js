@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { logActivity as writeActivity, withTransaction as runTransaction } from './db-helpers.js';
 
 const { Pool } = pg;
 
@@ -81,37 +82,9 @@ export async function initializeDatabase(databasePool = pool) {
 }
 
 export async function withTransaction(callback, databasePool = pool) {
-  if (typeof callback !== 'function') {
-    throw new TypeError('A transaction callback is required.');
-  }
-
-  const client = await databasePool.connect();
-  let transactionStarted = false;
-
-  try {
-    await client.query('BEGIN');
-    transactionStarted = true;
-    const result = await callback(client);
-    await client.query('COMMIT');
-    transactionStarted = false;
-    return result;
-  } catch (error) {
-    if (transactionStarted) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        // Preserve the original operation error; the connection is released below.
-      }
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
+  return runTransaction(callback, databasePool);
 }
 
 export async function logActivity(action, entityType, entityId, description, userId = null, executor = pool) {
-  await executor.query(
-    'INSERT INTO activity_logs (action, entity_type, entity_id, description, user_id) VALUES ($1, $2, $3, $4, $5)',
-    [action, entityType, entityId ?? null, description, userId ?? null]
-  );
+  return writeActivity(action, entityType, entityId, description, userId, executor);
 }

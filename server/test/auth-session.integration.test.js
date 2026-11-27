@@ -64,7 +64,9 @@ test('login, session lookup and logout revoke only the current server-side sessi
     secret: SECRET,
     authenticate,
     passwordVerifier: async (password, storedHash) =>
-      password === 'Valid-test-password-2026' && storedHash === ACCOUNT.password_hash
+      password === 'Valid-test-password-2026' && storedHash === ACCOUNT.password_hash,
+    transaction: async (callback, databasePool) => callback(databasePool),
+    activityLogger: async () => {}
   }));
 
   const server = app.listen(0, '127.0.0.1');
