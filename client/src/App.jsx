@@ -278,6 +278,11 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [activities, setActivities] = useState([]);
+  const [activityResults, setActivityResults] = useState([]);
+  const [activityActors, setActivityActors] = useState([]);
+  const [activityFilters, setActivityFilters] = useState({ actorId: '', entityType: '', action: '', from: '', to: '' });
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
   const [modal, setModal] = useState('');
   const [candidateForm, setCandidateForm] = useState(emptyCandidate);
   const [jobForm, setJobForm] = useState(emptyJob);
@@ -312,12 +317,40 @@ function App() {
       setCandidates(candidateData.candidates || []);
       setJobs(jobData.jobs || []);
       setActivities(activityData.activities || []);
+      setActivityActors(activityData.actors || []);
     } catch (err) {
       setError(err.message + ' — vérifie que PostgreSQL et le serveur API sont démarrés.');
     } finally { setLoading(false); }
   }, [user?.role]);
 
   useEffect(() => { if (user) loadData(); }, [loadData, user]);
+
+  const loadActivity = useCallback(async () => {
+    if (!user || user.role === 'hiring_manager') {
+      setActivityResults([]);
+      return;
+    }
+    setActivityLoading(true);
+    setActivityError('');
+    try {
+      const params = new URLSearchParams();
+      Object.entries(activityFilters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      const queryString = params.toString();
+      const result = await apiRequest('/activity' + (queryString ? '?' + queryString : ''));
+      setActivityResults(result.activities || []);
+      setActivityActors(result.actors || []);
+    } catch (err) {
+      setActivityError(err.message || 'Unable to load activity.');
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [user?.role, activityFilters]);
+
+  useEffect(() => {
+    if (user && active === 'Activity') loadActivity();
+  }, [user, active, loadActivity]);
 
   const logout = async () => {
     try {
@@ -328,6 +361,8 @@ function App() {
       setJobs([]);
       setDashboard(null);
       setActivities([]);
+      setActivityResults([]);
+      setActivityActors([]);
     } catch (err) {
       notify(err.message);
     }
@@ -450,7 +485,7 @@ function App() {
 
         {active === 'Job openings' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Job openings</h2><p>{jobs.length} vacancies saved in PostgreSQL</p></div>{canManage && <button className="button primary" onClick={() => setModal('job')}><Plus size={15}/> Create job</button>}</div><JobPanel jobs={jobs} onCreate={() => setModal('job')} onToggle={changeJobStatus} canManage={canManage}/></section>}
 
-        {active === 'Activity' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Activity log</h2><p>Audit trail of candidate and job changes</p></div><button className="button secondary" onClick={loadData}><RefreshCw size={14}/> Refresh</button></div><div className="activity-list">{activities.map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{item.entity_type} · {new Date(item.created_at).toLocaleString()} · {item.actor_email || 'Legacy / unknown actor'}</small></div><span className="activity-action">{item.action}</span></div>)}{!activities.length && <p className="empty-state">No activity yet. Add a candidate or job to start the log.</p>}</div></section>}
+        {active === 'Activity' && <section className="panel full-panel"><div className="panel-heading"><div><h2>Activity log</h2><p>Audit trail with role-aware security events and filters</p></div><button className="button secondary" onClick={loadActivity} disabled={activityLoading}><RefreshCw size={14}/> Refresh</button></div><div className="activity-filters" role="group" aria-label="Activity filters">{user?.role === 'admin' && <select aria-label="Filter by user" value={activityFilters.actorId} onChange={e=>setActivityFilters(current=>({...current,actorId:e.target.value}))}><option value="">All users</option>{activityActors.map(actor=><option key={actor.id} value={actor.id}>{actor.email}</option>)}</select>}<select aria-label="Filter by event type" value={activityFilters.entityType} onChange={e=>setActivityFilters(current=>({...current,entityType:e.target.value}))}><option value="">All event types</option><option value="candidate">Candidates</option><option value="job">Jobs</option>{user?.role === 'admin' && <><option value="user">Workspace users</option><option value="auth">Authentication</option></>}</select><select aria-label="Filter by action" value={activityFilters.action} onChange={e=>setActivityFilters(current=>({...current,action:e.target.value}))}><option value="">All actions</option><option value="created">Created</option><option value="updated">Updated</option><option value="deleted">Deleted</option>{user?.role === 'admin' && <><option value="login">Signed in</option><option value="logout">Signed out</option></>}</select><label className="activity-date-filter">From<input type="date" value={activityFilters.from} onChange={e=>setActivityFilters(current=>({...current,from:e.target.value}))}/></label><label className="activity-date-filter">To<input type="date" value={activityFilters.to} onChange={e=>setActivityFilters(current=>({...current,to:e.target.value}))}/></label><button className="button secondary activity-clear" onClick={()=>setActivityFilters({actorId:'',entityType:'',action:'',from:'',to:''})}>Clear filters</button></div>{activityError && <div className="error-banner" role="alert">{activityError}</div>}{activityLoading && <div className="loading-line">Loading activity…</div>}<div className="activity-list">{activityResults.map(item=><div className="activity-item" key={item.id}><span className="activity-icon"><Activity size={15}/></span><div><strong>{item.description}</strong><small>{item.entity_type} · {new Date(item.created_at).toLocaleString()} · {item.actor_email || 'Legacy / unknown actor'}</small></div><span className="activity-action">{item.action}</span></div>)}{!activityLoading && !activityResults.length && <p className="empty-state">No activity matches these filters.</p>}</div></section>}
 
         {active === 'CV analysis' && <CVAnalysisPanel canUpload={canManage}/>}
 
