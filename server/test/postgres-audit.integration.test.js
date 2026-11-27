@@ -200,14 +200,64 @@ test('PostgreSQL audit events identify their actor and roll back with recruitmen
   assert.equal(activities.payload.activities.length, 2);
   assert.ok(activities.payload.activities.every(activity => activity.user_id === recruiterId));
   assert.ok(activities.payload.activities.every(activity => activity.actor_email === recruiterEmail));
+  assert.deepEqual(activities.payload.actors, []);
+
+  const recruiterSecurityAttempt = await request('/activity?entityType=auth', { cookie: recruiterCookie });
+  assert.equal(recruiterSecurityAttempt.response.status, 403);
+
+  const adminActivities = await request('/activity', { cookie: adminCookie });
+  assert.equal(adminActivities.response.status, 200);
+  assert.equal(adminActivities.payload.actors.length, 2);
+  const userProvisioningEvents = adminActivities.payload.activities.filter(
+    activity => activity.entity_type === 'user' && activity.action === 'created'
+  );
+  assert.equal(userProvisioningEvents.length, 1);
+  assert.equal(userProvisioningEvents[0].actor_email, ADMIN.email);
+  assert.equal(String(userProvisioningEvents[0].entity_id), String(recruiterId));
+
+  const loginEvents = adminActivities.payload.activities.filter(
+    activity => activity.entity_type === 'auth' && activity.action === 'login'
+  );
+  assert.equal(loginEvents.length, 2);
+  assert.deepEqual(loginEvents.map(activity => activity.actor_email).sort(), [ADMIN.email, recruiterEmail].sort());
+
+  const today = new Date().toISOString().slice(0, 10);
+  const filteredLogins = await request(
+    `/activity?actorId=${recruiterId}&entityType=auth&action=login&from=${today}&to=${today}`,
+    { cookie: adminCookie }
+  );
+  assert.equal(filteredLogins.response.status, 200);
+  assert.equal(filteredLogins.payload.activities.length, 1);
+  assert.equal(filteredLogins.payload.activities[0].actor_email, recruiterEmail);
+
+  const invalidDate = await request('/activity?from=2026-02-30', { cookie: adminCookie });
+  assert.equal(invalidDate.response.status, 400);
+  const invalidDateRange = await request('/activity?from=2026-11-28&to=2026-11-27', { cookie: adminCookie });
+  assert.equal(invalidDateRange.response.status, 400);
+  const invalidEntityType = await request('/activity?entityType=unknown', { cookie: adminCookie });
+  assert.equal(invalidEntityType.response.status, 400);
 
   const persistedActors = await appPool.query(
     `SELECT a.action, a.user_id, u.email AS actor_email
      FROM activity_logs a
      LEFT JOIN users u ON u.id = a.user_id
+     WHERE a.entity_type = 'candidate'
      ORDER BY a.id`
   );
   assert.deepEqual(persistedActors.rows.map(row => row.action), ['created', 'updated']);
   assert.ok(persistedActors.rows.every(row => row.user_id === recruiterId));
   assert.ok(persistedActors.rows.every(row => row.actor_email === recruiterEmail));
+
+  const recruiterLogout = await request('/auth/logout', {
+    method: 'POST',
+    cookie: recruiterCookie
+  });
+  assert.equal(recruiterLogout.response.status, 204);
+  const logoutEvent = await request(
+    `/activity?actorId=${recruiterId}&entityType=auth&action=logout`,
+    { cookie: adminCookie }
+  );
+  assert.equal(logoutEvent.response.status, 200);
+  assert.equal(logoutEvent.payload.activities.length, 1);
+  assert.equal(logoutEvent.payload.activities[0].actor_email, recruiterEmail);
 });
