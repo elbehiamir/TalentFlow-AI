@@ -224,7 +224,8 @@ test('PostgreSQL recruitment API persists CRUD and enforces role permissions', {
 
   const recruiterActivity = await request('/activity', { cookie: recruiterCookie });
   assert.equal(recruiterActivity.response.status, 200);
-  assert.ok(recruiterActivity.payload.activities.length >= 4);
+  assert.equal(recruiterActivity.payload.activities.length, 6);
+  assert.ok(recruiterActivity.payload.activities.every(activity => ['candidate', 'job'].includes(activity.entity_type)));
 
   const jobDeleted = await request('/jobs/' + jobId, {
     method: 'DELETE',
@@ -248,5 +249,9 @@ test('PostgreSQL recruitment API persists CRUD and enforces role permissions', {
   assert.equal(finalJobs.payload.jobs.length, 0);
 
   const finalActivity = await request('/activity', { cookie: adminCookie });
-  assert.equal(finalActivity.payload.activities.length, 6);
+  assert.equal(finalActivity.payload.activities.length, 11);
+  assert.equal(finalActivity.payload.activities.filter(activity => ['candidate', 'job'].includes(activity.entity_type)).length, 6);
+  assert.equal(finalActivity.payload.activities.filter(activity => activity.entity_type === 'auth' && activity.action === 'login').length, 3);
+  assert.equal(finalActivity.payload.activities.filter(activity => activity.entity_type === 'user' && activity.action === 'created').length, 2);
+  assert.equal(finalActivity.payload.actors.length, 3);
 });
