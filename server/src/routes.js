@@ -27,10 +27,14 @@ router.post('/users', requireRoles('admin'), async (req, res, next) => {
       return res.status(400).json({ error: 'Role must be recruiter or hiring_manager.' });
     }
     const passwordHash = await hashPassword(password);
-    const result = await pool.query(
-      'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
-      [email, passwordHash, role]
-    );
+    const result = await withTransaction(async client => {
+      const inserted = await client.query(
+        'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
+        [email, passwordHash, role]
+      );
+      await logActivity('created', 'user', inserted.rows[0].id, `Workspace user created: ${email} (${role})`, req.user.id, client);
+      return inserted;
+    });
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'A user with this email already exists.' });
@@ -230,16 +234,73 @@ router.delete('/jobs/:id', requireRoles('admin'), async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/activity', requireRoles('admin', 'recruiter'), async (_req, res, next) => {
+router.get('/activity', requireRoles('admin', 'recruiter'), async (req, res, next) => {
   try {
+    for (const key of ['actorId', 'entityType', 'action', 'from', 'to']) {
+      if (req.query[key] !== undefined && typeof req.query[key] !== 'string') {
+        return res.status(400).json({ error: `Invalid ${key} filter.` });
+      }
+    }
+    const actorValue = req.query.actorId || '';
+    const actorId = actorValue ? parsePositiveId(actorValue) : null;
+    if (actorValue && actorId === null) return res.status(400).json({ error: 'Invalid actor id filter.' });
+
+    const entityType = req.query.entityType || '';
+    const action = req.query.action || '';
+    const from = req.query.from || '';
+    const to = req.query.to || '';
+    const allowedEntityTypes = ['candidate', 'job', 'user', 'auth'];
+    const allowedActions = ['created', 'updated', 'deleted', 'login', 'logout'];
+    const isDateOnly = value => {
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+      const timestamp = Date.parse(value + 'T00:00:00.000Z');
+      return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+    };
+
+    if (entityType && !allowedEntityTypes.includes(entityType)) return res.status(400).json({ error: 'Invalid activity entity type.' });
+    if (action && !allowedActions.includes(action)) return res.status(400).json({ error: 'Invalid activity action.' });
+    if ((from && !isDateOnly(from)) || (to && !isDateOnly(to))) {
+      return res.status(400).json({ error: 'Dates must use the YYYY-MM-DD format.' });
+    }
+    if (from && to && from > to) return res.status(400).json({ error: 'The start date must not be after the end date.' });
+
+    if (req.user.role !== 'admin' &&
+        (['auth', 'user'].includes(entityType) || ['login', 'logout'].includes(action))) {
+      return res.status(403).json({ error: 'Security activity is only available to administrators.' });
+    }
+
+    const conditions = [];
+    const values = [];
+    if (req.user.role !== 'admin') conditions.push("a.entity_type NOT IN ('auth', 'user')");
+    const addFilter = (sql, value) => {
+      values.push(value);
+      conditions.push(sql.replace('?', `$${values.length}`));
+    };
+    if (actorId !== null) addFilter('a.user_id = ?', actorId);
+    if (entityType) addFilter('a.entity_type = ?', entityType);
+    if (action) addFilter('a.action = ?', action);
+    if (from) {
+      values.push(from);
+      conditions.push(`a.created_at >= ($${values.length}::date::timestamp AT TIME ZONE 'UTC')`);
+    }
+    if (to) {
+      values.push(to);
+      conditions.push(`a.created_at < (($${values.length}::date + INTERVAL '1 day') AT TIME ZONE 'UTC')`);
+    }
+
     const result = await pool.query(
       `SELECT a.id, a.action, a.entity_type, a.entity_id, a.description,
               a.user_id, u.email AS actor_email, a.created_at
        FROM activity_logs a
        LEFT JOIN users u ON u.id = a.user_id
-       ORDER BY a.created_at DESC LIMIT 100`
+       WHERE ${conditions.length ? conditions.join(' AND ') : 'TRUE'}
+       ORDER BY a.created_at DESC, a.id DESC LIMIT 100`,
+      values
     );
-    res.json({ activities: result.rows });
+    const actors = req.user.role === 'admin'
+      ? await pool.query('SELECT id, email FROM users ORDER BY email')
+      : { rows: [] };
+    res.json({ activities: result.rows, actors: actors.rows });
   } catch (error) { next(error); }
 });
 
