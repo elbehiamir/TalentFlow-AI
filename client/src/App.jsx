@@ -363,6 +363,8 @@ function App() {
       setActivities([]);
       setActivityResults([]);
       setActivityActors([]);
+      setActivityFilters({ actorId: '', entityType: '', action: '', from: '', to: '' });
+      setActivityError('');
     } catch (err) {
       notify(err.message);
     }
