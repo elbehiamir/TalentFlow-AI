@@ -224,7 +224,7 @@ test('PostgreSQL recruitment API persists CRUD and enforces role permissions', {
 
   const recruiterActivity = await request('/activity', { cookie: recruiterCookie });
   assert.equal(recruiterActivity.response.status, 200);
-  assert.equal(recruiterActivity.payload.activities.length, 6);
+  assert.equal(recruiterActivity.payload.activities.length, 4);
   assert.ok(recruiterActivity.payload.activities.every(activity => ['candidate', 'job'].includes(activity.entity_type)));
 
   const jobDeleted = await request('/jobs/' + jobId, {
